@@ -88,31 +88,6 @@
                         </select>
                     </div>
 
-                    <%-- ── Group 3: Deployment ────────────────────────────── --%>
-                    <p class="fw-semibold mb-2 text-uppercase" style="font-size:.8rem;letter-spacing:.05em;color:#6c757d;">
-                        <i class="bi bi-cloud-upload me-1"></i>Deployment
-                    </p>
-                    <div class="row g-3 mb-4">
-                        <div class="col-6 col-md-3">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="movedToLocal" id="movedToLocal" value="true" ${mr.movedToLocal ? 'checked' : ''}/>
-                                <label class="form-check-label" for="movedToLocal">Moved to Local</label>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="movedToPre" id="movedToPre" value="true" ${mr.movedToPre ? 'checked' : ''}/>
-                                <label class="form-check-label" for="movedToPre">Moved to Pre</label>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" name="movedToIdc" id="movedToIdc" value="true" ${mr.movedToIdc ? 'checked' : ''}/>
-                                <label class="form-check-label" for="movedToIdc">Moved to IDC</label>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="d-flex gap-2 justify-content-end">
                         <a href="/mrs" class="btn btn-outline-secondary">Cancel</a>
                         <button type="submit" class="btn btn-primary">

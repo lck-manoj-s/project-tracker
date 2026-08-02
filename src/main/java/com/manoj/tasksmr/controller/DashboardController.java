@@ -1,10 +1,13 @@
 package com.manoj.tasksmr.controller;
 
+import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.enums.Product;
 import com.manoj.tasksmr.enums.TaskStatus;
 import com.manoj.tasksmr.model.MergeRequest;
+import com.manoj.tasksmr.model.MrStatusHistory;
 import com.manoj.tasksmr.model.Task;
 import com.manoj.tasksmr.model.TaskStatusHistory;
+import com.manoj.tasksmr.repository.MrStatusHistoryRepository;
 import com.manoj.tasksmr.repository.TaskStatusHistoryRepository;
 import com.manoj.tasksmr.service.MrService;
 import com.manoj.tasksmr.service.TaskService;
@@ -25,6 +28,7 @@ public class DashboardController {
     private final TaskService taskService;
     private final MrService   mrService;
     private final TaskStatusHistoryRepository taskStatusHistoryRepo;
+    private final MrStatusHistoryRepository   mrStatusHistoryRepo;
 
     private static final int STALE_DAYS = 3;
 
@@ -43,15 +47,15 @@ public class DashboardController {
 
         List<Task> tasksNoMr = allTasks.stream()
                 .filter(t -> t.getStatus() != TaskStatus.PAUSED && t.getStatus() != TaskStatus.DONE)
-                .filter(t -> t.getPayrollMr() == null && t.getBooksMr() == null)
+                .filter(t -> t.getMergeRequests() == null || t.getMergeRequests().isEmpty())
                 .toList();
 
-        // DI pending = at least one MR not yet having stepDiCompleted checked
+        // DI pending = has at least one MR, and at least one linked MR not yet DI-completed
         List<Task> tasksDiPending = allTasks.stream()
                 .filter(t -> t.getStatus() != TaskStatus.DONE && t.getStatus() != TaskStatus.PAUSED)
-                .filter(t -> t.getPayrollMr() != null || t.getBooksMr() != null)
-                .filter(t -> (t.getPayrollMr() != null && !Boolean.TRUE.equals(t.getPayrollMr().getStepDiCompleted()))
-                          || (t.getBooksMr()   != null && !Boolean.TRUE.equals(t.getBooksMr().getStepDiCompleted())))
+                .filter(t -> t.getMergeRequests() != null && !t.getMergeRequests().isEmpty())
+                .filter(t -> t.getMergeRequests().stream()
+                        .anyMatch(mr -> !Boolean.TRUE.equals(mr.getStepDiCompleted())))
                 .toList();
 
         // ── All MRs — single DB load, partitioned in-memory ───────────────
@@ -67,38 +71,41 @@ public class DashboardController {
                 .filter(mr -> !mr.getCanIgnore())
                 .toList();
 
-        // Attention blocks — based on step booleans
+        // Attention blocks — based on current pipeline stage (MrStatus)
         List<MergeRequest> mrsNotReviewed = allActiveMrs.stream()
-                .filter(mr -> !Boolean.TRUE.equals(mr.getStepWaiting())).toList();
+                .filter(mr -> mr.getStatus().ordinal() < MrStatus.REVIEWED.ordinal()).toList();
         List<MergeRequest> mrsReadyForGtm = allActiveMrs.stream()
-                .filter(mr -> Boolean.TRUE.equals(mr.getStepDiCompleted()) && !Boolean.TRUE.equals(mr.getStepGtm())).toList();
+                .filter(mr -> mr.getStatus() == MrStatus.DI_COMPLETED).toList();
         List<MergeRequest> mrsReadyForRtm = allActiveMrs.stream()
-                .filter(mr -> Boolean.TRUE.equals(mr.getStepGtm()) && !Boolean.TRUE.equals(mr.getStepRtm())).toList();
+                .filter(mr -> mr.getStatus() == MrStatus.GTM).toList();
         List<MergeRequest> mrsNotMerged   = allActiveMrs.stream()
-                .filter(mr -> !Boolean.TRUE.equals(mr.getStepMerged())).toList();
+                .filter(mr -> mr.getStatus() != MrStatus.MERGED).toList();
 
-        // MR pipeline step counts — canIgnore excluded (how many MRs have each step checked)
-        long payrollWaiting     = countStep(payrollMrsActive, "stepWaiting");
-        long payrollReviewed    = countStep(payrollMrsActive, "stepReviewed");
-        long payrollDiScheduled = countStep(payrollMrsActive, "stepDiScheduled");
-        long payrollDiCompleted = countStep(payrollMrsActive, "stepDiCompleted");
-        long payrollGtm         = countStep(payrollMrsActive, "stepGtm");
-        long payrollRtm         = countStep(payrollMrsActive, "stepRtm");
-        long payrollMerged      = countStep(payrollMrsActive, "stepMerged");
+        // MR pipeline step counts — canIgnore excluded (how many MRs have reached each stage or beyond)
+        long payrollNew         = countStep(payrollMrsActive, MrStatus.NEW);
+        long payrollReviewed    = countStep(payrollMrsActive, MrStatus.REVIEWED);
+        long payrollDiCompleted = countStep(payrollMrsActive, MrStatus.DI_COMPLETED);
+        long payrollGtm         = countStep(payrollMrsActive, MrStatus.GTM);
+        long payrollRtm         = countStep(payrollMrsActive, MrStatus.RTM);
+        long payrollMerged      = countStep(payrollMrsActive, MrStatus.MERGED);
 
-        long booksWaiting     = countStep(booksMrsActive, "stepWaiting");
-        long booksReviewed    = countStep(booksMrsActive, "stepReviewed");
-        long booksDiScheduled = countStep(booksMrsActive, "stepDiScheduled");
-        long booksDiCompleted = countStep(booksMrsActive, "stepDiCompleted");
-        long booksGtm         = countStep(booksMrsActive, "stepGtm");
-        long booksRtm         = countStep(booksMrsActive, "stepRtm");
-        long booksMerged      = countStep(booksMrsActive, "stepMerged");
+        long booksNew         = countStep(booksMrsActive, MrStatus.NEW);
+        long booksReviewed    = countStep(booksMrsActive, MrStatus.REVIEWED);
+        long booksDiCompleted = countStep(booksMrsActive, MrStatus.DI_COMPLETED);
+        long booksGtm         = countStep(booksMrsActive, MrStatus.GTM);
+        long booksRtm         = countStep(booksMrsActive, MrStatus.RTM);
+        long booksMerged      = countStep(booksMrsActive, MrStatus.MERGED);
 
         // ── Task history data ──────────────────────────────────────────────
         List<TaskStatusHistory> allTaskHistory = taskStatusHistoryRepo.findAllOrderByChangedAtDesc();
 
         Map<Long, List<TaskStatusHistory>> taskHistoryMap = allTaskHistory.stream()
                 .collect(Collectors.groupingBy(h -> h.getTask().getTaskId()));
+
+        // ── MR history data ─────────────────────────────────────────────────
+        List<MrStatusHistory> allMrHistory = mrStatusHistoryRepo.findAllOrderByChangedAtDesc();
+        Map<Long, List<MrStatusHistory>> mrHistoryMap = allMrHistory.stream()
+                .collect(Collectors.groupingBy(h -> h.getMergeRequest().getMrSerialNumber()));
 
         // ── Recent task activity (last 10 task status changes) ────────────
         List<Map<String, Object>> recentTaskActivity = new ArrayList<>();
@@ -136,14 +143,14 @@ public class DashboardController {
         }
         staleTasks.sort(Comparator.comparingLong(m -> -((long) m.get("daysSince"))));
 
-        // ── Stale MRs (active non-merged, no toggle > STALE_DAYS) ─────────
-        // Uses lastModifiedAt (updated on every toggle); falls back to createdAt for legacy rows.
+        // ── Stale MRs (active non-merged, no status change for > STALE_DAYS) ───
+        // Mirrors stale-task logic: last change = most recent mr_status_history row,
+        // falling back to createdAt if the MR has never transitioned.
         List<Map<String, Object>> staleMrs = new ArrayList<>();
         for (MergeRequest mr : allActiveMrs) {
-            if (Boolean.TRUE.equals(mr.getStepMerged())) continue;
-            LocalDateTime lastChange = mr.getLastModifiedAt() != null
-                    ? mr.getLastModifiedAt()
-                    : mr.getCreatedAt();
+            if (mr.getStatus() == MrStatus.MERGED) continue;
+            List<MrStatusHistory> hist = mrHistoryMap.getOrDefault(mr.getMrSerialNumber(), List.of());
+            LocalDateTime lastChange = hist.isEmpty() ? mr.getCreatedAt() : hist.get(0).getChangedAt();
             if (lastChange == null) continue;
             if (lastChange.isBefore(staleThreshold)) {
                 long daysSince = ChronoUnit.DAYS.between(lastChange, LocalDateTime.now());
@@ -161,7 +168,7 @@ public class DashboardController {
         }
         staleMrs.sort(Comparator.comparingLong(m -> -((long) m.get("daysSince"))));
 
-        // ── MRs waiting longest for thumbs up (stepWaiting not checked) ───
+        // ── MRs waiting longest to be reviewed (status still NEW) ─────────
         List<Map<String, Object>> mrsWaitingLongest = new ArrayList<>();
         for (MergeRequest mr : mrsNotReviewed) {
             LocalDateTime waitSince = mr.getCreatedAt();
@@ -227,6 +234,65 @@ public class DashboardController {
             avgStatusData.add(item);
         }
 
+        // ── Average time spent in each MR pipeline stage ───────────────────
+        // Mirrors avgStatusData for tasks, but driven by mr_status_history transitions
+        // now that MR status is a single current-value enum (MrStatus) instead of
+        // independent checklist booleans. allMrHistory/mrHistoryMap were built above
+        // alongside the task history data.
+        Map<MrStatus, List<Long>> mrStatusDurations = new EnumMap<>(MrStatus.class);
+        for (MrStatus s : MrStatus.values()) mrStatusDurations.put(s, new ArrayList<>());
+
+        for (MergeRequest mr : allMrs) {
+            List<MrStatusHistory> hist = mrHistoryMap.getOrDefault(mr.getMrSerialNumber(), List.of());
+            List<MrStatusHistory> histAsc = new ArrayList<>(hist);
+            Collections.reverse(histAsc);
+            for (int i = 0; i < histAsc.size() - 1; i++) {
+                MrStatus status = histAsc.get(i).getNewStatus();
+                long hours = ChronoUnit.HOURS.between(
+                        histAsc.get(i).getChangedAt(), histAsc.get(i + 1).getChangedAt());
+                mrStatusDurations.get(status).add(Math.max(hours, 0));
+            }
+            // Current status: time from last transition (or creation, if never transitioned) to now,
+            // unless it's already MERGED (a terminal state, like DONE for tasks).
+            MrStatus currentStatus = mr.getStatus();
+            if (currentStatus != MrStatus.MERGED) {
+                LocalDateTime since = histAsc.isEmpty() ? mr.getCreatedAt() : histAsc.get(histAsc.size() - 1).getChangedAt();
+                if (since != null) {
+                    long hours = ChronoUnit.HOURS.between(since, LocalDateTime.now());
+                    mrStatusDurations.get(currentStatus).add(Math.max(hours, 0));
+                }
+            }
+        }
+
+        List<Map<String, Object>> avgMrStageData = new ArrayList<>();
+        for (MrStatus s : new MrStatus[]{
+                MrStatus.NEW, MrStatus.REVIEWED, MrStatus.DI_COMPLETED, MrStatus.GTM, MrStatus.RTM}) {
+            List<Long> durations = mrStatusDurations.get(s);
+            double avgHours = durations.isEmpty() ? 0
+                    : durations.stream().mapToLong(Long::longValue).average().orElse(0);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("label",   s.getDisplayName());
+            item.put("hours",   Math.round(avgHours * 10.0) / 10.0);
+            item.put("display", durations.isEmpty() ? "—" : formatDuration(avgHours));
+            item.put("count",   durations.size());
+            avgMrStageData.add(item);
+        }
+
+        // ── Recent MR activity (last 10 MR status changes) — mirrors recentTaskActivity ──
+        List<Map<String, Object>> recentMrActivity = new ArrayList<>();
+        for (MrStatusHistory h : allMrHistory.stream().limit(10).toList()) {
+            MergeRequest mr = h.getMergeRequest();
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("entityLabel",    mr.getProduct().getDisplayName() + " MR " + mr.getMrNumber());
+            item.put("entityDesc",     mr.getName() != null ? truncate(mr.getName(), 50) : "");
+            item.put("entityUrl",      "/mrs/edit/" + mr.getMrSerialNumber());
+            item.put("productKey",     mr.getProduct().name());
+            item.put("previousStatus", h.getPreviousStatus() != null ? h.getPreviousStatus().getDisplayName() : null);
+            item.put("newStatus",      h.getNewStatus().getDisplayName());
+            item.put("timeAgo",        timeAgo(h.getChangedAt()));
+            recentMrActivity.add(item);
+        }
+
         // ── Model ──────────────────────────────────────────────────────────
         // Totals
         model.addAttribute("totalTasks",       allTasks.size());
@@ -250,16 +316,14 @@ public class DashboardController {
         model.addAttribute("tasksDiPending",   tasksDiPending);
 
         // MR distribution
-        model.addAttribute("payrollWaiting",     payrollWaiting);
+        model.addAttribute("payrollNew",         payrollNew);
         model.addAttribute("payrollReviewed",    payrollReviewed);
-        model.addAttribute("payrollDiScheduled", payrollDiScheduled);
         model.addAttribute("payrollDiCompleted", payrollDiCompleted);
         model.addAttribute("payrollGtm",         payrollGtm);
         model.addAttribute("payrollRtm",         payrollRtm);
         model.addAttribute("payrollMerged",      payrollMerged);
-        model.addAttribute("booksWaiting",     booksWaiting);
+        model.addAttribute("booksNew",         booksNew);
         model.addAttribute("booksReviewed",    booksReviewed);
-        model.addAttribute("booksDiScheduled", booksDiScheduled);
         model.addAttribute("booksDiCompleted", booksDiCompleted);
         model.addAttribute("booksGtm",         booksGtm);
         model.addAttribute("booksRtm",         booksRtm);
@@ -277,35 +341,22 @@ public class DashboardController {
         model.addAttribute("staleMrs",           staleMrs);
         model.addAttribute("mrsWaitingLongest",  mrsWaitingLongest);
         model.addAttribute("avgStatusData",      avgStatusData);
+        model.addAttribute("avgMrStageData",     avgMrStageData);
+        model.addAttribute("recentMrActivity",   recentMrActivity);
 
         return "dashboard";
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private long countStep(List<MergeRequest> mrs, String step) {
-        return switch (step) {
-            case "stepWaiting"     -> mrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getStepWaiting())).count();
-            case "stepReviewed"    -> mrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getStepReviewed())).count();
-            case "stepDiScheduled" -> mrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getStepDiScheduled())).count();
-            case "stepDiCompleted" -> mrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getStepDiCompleted())).count();
-            case "stepGtm"         -> mrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getStepGtm())).count();
-            case "stepRtm"         -> mrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getStepRtm())).count();
-            case "stepMerged"      -> mrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getStepMerged())).count();
-            default -> 0L;
-        };
+    /** Counts MRs whose current status has reached or passed the given pipeline stage. */
+    private long countStep(List<MergeRequest> mrs, MrStatus stage) {
+        return mrs.stream().filter(mr -> mr.getStatus().ordinal() >= stage.ordinal()).count();
     }
 
-    /** Derives a human-readable pipeline stage from the highest checked step boolean. */
+    /** Human-readable label for the MR's current pipeline stage. */
     private String deriveStageLabel(MergeRequest mr) {
-        if (Boolean.TRUE.equals(mr.getStepMerged()))      return "Merged";
-        if (Boolean.TRUE.equals(mr.getStepRtm()))         return "RTM Obtained";
-        if (Boolean.TRUE.equals(mr.getStepGtm()))         return "GTM Obtained";
-        if (Boolean.TRUE.equals(mr.getStepDiCompleted())) return "DI Completed";
-        if (Boolean.TRUE.equals(mr.getStepDiScheduled())) return "DI Scheduled";
-        if (Boolean.TRUE.equals(mr.getStepReviewed()))    return "Reviewed";
-        if (Boolean.TRUE.equals(mr.getStepWaiting()))     return "Waiting (Thumbs Up)";
-        return "Not Started";
+        return mr.getStatus().getDisplayName();
     }
 
     private String timeAgo(LocalDateTime dt) {

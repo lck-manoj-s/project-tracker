@@ -10,6 +10,6 @@ import java.util.List;
 public interface TaskStatusHistoryRepository extends JpaRepository<TaskStatusHistory, Long> {
     List<TaskStatusHistory> findByTaskOrderByChangedAtAsc(Task task);
 
-    @Query("SELECT h FROM TaskStatusHistory h JOIN FETCH h.task t LEFT JOIN FETCH t.payrollMr LEFT JOIN FETCH t.booksMr ORDER BY h.changedAt DESC")
+    @Query("SELECT h FROM TaskStatusHistory h JOIN FETCH h.task t LEFT JOIN FETCH t.mergeRequests ORDER BY h.changedAt DESC")
     List<TaskStatusHistory> findAllOrderByChangedAtDesc();
 }

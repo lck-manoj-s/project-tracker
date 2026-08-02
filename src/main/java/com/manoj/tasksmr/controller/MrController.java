@@ -2,6 +2,7 @@ package com.manoj.tasksmr.controller;
 
 import com.manoj.tasksmr.dto.MrFilterDTO;
 import com.manoj.tasksmr.enums.MrLinked;
+import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.enums.Product;
 import com.manoj.tasksmr.model.MergeRequest;
 import com.manoj.tasksmr.service.MrService;
@@ -17,6 +18,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
@@ -49,15 +52,12 @@ public class MrController {
             @RequestParam(required = false) String parentMrProduct,
             @RequestParam(required = false) String mrLinked,
             @RequestParam(required = false) String merged,
-            @RequestParam(required = false) String movedToLocal,
-            @RequestParam(required = false) String movedToPre,
-            @RequestParam(required = false) String movedToIdc,
             @RequestParam(required = false) String canIgnore,
             @RequestParam(defaultValue = "0") int page,
             Model model) {
         return listMrsForProduct(Product.PAYROLL, "/mrs/payroll",
                 hasParentMr, parentMrProduct, mrLinked, merged,
-                movedToLocal, movedToPre, movedToIdc, canIgnore, page, model);
+                canIgnore, page, model);
     }
 
     @GetMapping("/books")
@@ -66,21 +66,17 @@ public class MrController {
             @RequestParam(required = false) String parentMrProduct,
             @RequestParam(required = false) String mrLinked,
             @RequestParam(required = false) String merged,
-            @RequestParam(required = false) String movedToLocal,
-            @RequestParam(required = false) String movedToPre,
-            @RequestParam(required = false) String movedToIdc,
             @RequestParam(required = false) String canIgnore,
             @RequestParam(defaultValue = "0") int page,
             Model model) {
         return listMrsForProduct(Product.BOOKS, "/mrs/books",
                 hasParentMr, parentMrProduct, mrLinked, merged,
-                movedToLocal, movedToPre, movedToIdc, canIgnore, page, model);
+                canIgnore, page, model);
     }
 
     private String listMrsForProduct(Product product, String baseUrl,
             String hasParentMr, String parentMrProduct, String mrLinked,
             String merged,
-            String movedToLocal, String movedToPre, String movedToIdc,
             String canIgnore, int page, Model model) {
 
         // Default canIgnore to "false" (exclude canIgnore MRs); "all" means no filter
@@ -90,7 +86,7 @@ public class MrController {
 
         MrFilterDTO filter = buildFilter(product,
                 hasParentMr, parentMrProduct, mrLinked, effectiveMerged,
-                movedToLocal, movedToPre, movedToIdc, effectiveCanIgnore);
+                effectiveCanIgnore);
 
         Page<MergeRequest> mrPage = mrService.getFilteredMrsPaged(filter, page, MR_PAGE_SIZE);
 
@@ -108,9 +104,6 @@ public class MrController {
         model.addAttribute("parentMrProduct", parentMrProduct);
         model.addAttribute("mrLinked",        mrLinked);
         model.addAttribute("merged",          effectiveMerged);
-        model.addAttribute("movedToLocal",    movedToLocal);
-        model.addAttribute("movedToPre",      movedToPre);
-        model.addAttribute("movedToIdc",      movedToIdc);
         model.addAttribute("canIgnore",       effectiveCanIgnore);
 
         return "mr/list";
@@ -130,16 +123,23 @@ public class MrController {
         return "mr/form";
     }
 
+    /**
+     * Save MR. Note: {@code form} is a fresh object bound only from this form's fields —
+     * it does NOT carry status, task link, or step history, so in edit mode we apply the
+     * form fields onto the persisted entity rather than saving {@code form} directly.
+     * Otherwise every edit (e.g. changing the URL) would silently reset the MR's pipeline
+     * stage back to NEW and unlink it from its task.
+     */
     @PostMapping("/save")
     public String saveMr(
-            @ModelAttribute MergeRequest mr,
+            @ModelAttribute MergeRequest form,
             @RequestParam(required = false) Long parentMrId,
             RedirectAttributes ra) {
 
         // Duplicate URL check
-        if (mr.getMr() != null && !mr.getMr().isBlank()) {
-            mrService.findByUrl(mr.getMr().trim()).ifPresent(existing -> {
-                if (!existing.getMrSerialNumber().equals(mr.getMrSerialNumber())) {
+        if (form.getMr() != null && !form.getMr().isBlank()) {
+            mrService.findByUrl(form.getMr().trim()).ifPresent(existing -> {
+                if (!existing.getMrSerialNumber().equals(form.getMrSerialNumber())) {
                     ra.addFlashAttribute("errorMessage",
                         "MR URL already exists (MR #" + existing.getMrSerialNumber() + "). Please use a unique URL.");
                 }
@@ -147,13 +147,23 @@ public class MrController {
         }
 
         if (ra.getFlashAttributes().containsKey("errorMessage")) {
-            String redirect = mr.getMrSerialNumber() != null
-                    ? "redirect:/mrs/edit/" + mr.getMrSerialNumber()
+            String redirect = form.getMrSerialNumber() != null
+                    ? "redirect:/mrs/edit/" + form.getMrSerialNumber()
                     : "redirect:/mrs/new";
             return redirect;
         }
 
+        MergeRequest mr = form.getMrSerialNumber() != null
+                ? mrService.getMrById(form.getMrSerialNumber()).orElse(form)
+                : form;
+
+        mr.setMr(form.getMr());
+        mr.setName(form.getName());
+        mr.setProduct(form.getProduct());
+        mr.setCanIgnore(form.getCanIgnore());
+        mr.setMrLinked(form.getMrLinked());
         mr.setParentMr(parentMrId != null ? mrService.getMrById(parentMrId).orElse(null) : null);
+
         MergeRequest saved = mrService.saveMr(mr);
         return "redirect:/mrs/" + saved.getProduct().name().toLowerCase();
     }
@@ -167,9 +177,11 @@ public class MrController {
         return "redirect:/mrs/" + product;
     }
 
+    private static final Set<String> PLAIN_TOGGLE_FIELDS = Set.of("canIgnore");
+
     /**
-     * Inline boolean toggle for deployment and canIgnore fields — called via AJAX.
-     * Returns {field, newValue}.
+     * Inline boolean toggle for deployment/canIgnore flags — called via AJAX.
+     * Returns {field, newValue}. Pipeline stage changes go through /status/{status} instead.
      */
     @PostMapping("/{id}/toggle/{field}")
     @ResponseBody
@@ -177,17 +189,12 @@ public class MrController {
             @PathVariable Long id,
             @PathVariable String field) {
 
-        Set<String> allowed = Set.of(
-                "movedToLocal", "movedToPre", "movedToIdc", "canIgnore",
-                "stepWaiting", "stepReviewed", "stepDiScheduled", "stepDiCompleted",
-                "stepGtm", "stepRtm", "stepMerged");
-        if (!allowed.contains(field)) {
+        if (!PLAIN_TOGGLE_FIELDS.contains(field)) {
             return ResponseEntity.badRequest().build();
         }
 
         MergeRequest mr = mrService.getMrById(id)
                 .orElseThrow(() -> new IllegalArgumentException("MR not found: " + id));
-
         boolean newValue = doToggle(mr, field);
         mrService.saveMr(mr);
 
@@ -197,7 +204,78 @@ public class MrController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Sets the MR's pipeline stage directly (clicking any stage badge in the pipeline UI
+     * jumps to that stage — forward or backward). Records the transition in mr_status_history
+     * for per-stage duration tracking. Returns the resulting status (name + display label).
+     */
+    @PostMapping("/{id}/status/{status}")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> setStatus(
+            @PathVariable Long id,
+            @PathVariable String status) {
+
+        MrStatus target;
+        try {
+            target = MrStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        MrStatus newStatus = mrService.updateStatus(id, target);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status",      newStatus.name());
+        response.put("displayName", newStatus.getDisplayName());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * JSON endpoint for the inline parent-chain panel — mirrors the task page's
+     * per-task MR panel. Returns the given MR plus every ancestor MR (parentMr,
+     * parentMr.parentMr, ...), ordered oldest-ancestor-first so the clicked MR
+     * is always the last (rightmost) column.
+     */
+    @GetMapping("/{id}/chain")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getMrChain(@PathVariable Long id) {
+        MergeRequest mr = mrService.getMrById(id)
+                .orElseThrow(() -> new IllegalArgumentException("MR not found: " + id));
+
+        LinkedList<Map<String, Object>> chain = new LinkedList<>();
+        Set<Long> seen = new HashSet<>();
+        MergeRequest current = mr;
+        while (current != null && seen.add(current.getMrSerialNumber())) {
+            chain.addFirst(mrToMap(current));
+            current = current.getParentMr();
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("mrSerialNumber", mr.getMrSerialNumber());
+        response.put("chain", chain);
+        return ResponseEntity.ok(response);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    /** Converts a MergeRequest to a plain Map for JSON serialisation — mirrors TaskController.mrToMap. */
+    private Map<String, Object> mrToMap(MergeRequest mr) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("mrSerialNumber",  mr.getMrSerialNumber());
+        m.put("mrNumber",        mr.getMrNumber());
+        m.put("mr",              mr.getMr());
+        m.put("name",            mr.getName());
+        m.put("product",         mr.getProduct().getDisplayName());
+        m.put("mrLinked",        mr.getMrLinked().getDisplayName());
+        m.put("createdAt",       mr.getCreatedAt() != null ? mr.getCreatedAt().toString().substring(0, 16).replace('T', ' ') : null);
+        m.put("stepNew",         mr.getStepNew());
+        m.put("stepReviewed",    mr.getStepReviewed());
+        m.put("stepDiCompleted", mr.getStepDiCompleted());
+        m.put("stepGtm",         mr.getStepGtm());
+        m.put("stepRtm",         mr.getStepRtm());
+        m.put("stepMerged",      mr.getStepMerged());
+        return m;
+    }
 
     private void populateFormModel(Model model, MergeRequest mr, boolean isEdit) {
         MrFilterDTO allFilter = new MrFilterDTO();
@@ -213,7 +291,6 @@ public class MrController {
     private MrFilterDTO buildFilter(Product product,
             String hasParentMr, String parentMrProduct, String mrLinked,
             String merged,
-            String movedToLocal, String movedToPre, String movedToIdc,
             String canIgnore) {
 
         MrFilterDTO f = new MrFilterDTO();
@@ -227,9 +304,6 @@ public class MrController {
             f.setStepMerged(Boolean.valueOf(merged));
         }
 
-        if (notBlank(movedToLocal))    f.setMovedToLocal(Boolean.valueOf(movedToLocal));
-        if (notBlank(movedToPre))      f.setMovedToPre(Boolean.valueOf(movedToPre));
-        if (notBlank(movedToIdc))      f.setMovedToIdc(Boolean.valueOf(movedToIdc));
         if (notBlank(canIgnore) && !"all".equals(canIgnore)) f.setCanIgnore(Boolean.valueOf(canIgnore));
         return f;
     }
@@ -238,20 +312,10 @@ public class MrController {
         return s != null && !s.isBlank();
     }
 
-    /** Toggle a single boolean field on the MR and return the new value. */
+    /** Toggle a single plain boolean field (canIgnore) on the MR and return the new value. */
     private boolean doToggle(MergeRequest mr, String field) {
         return switch (field) {
-            case "movedToLocal"    -> { boolean v = !mr.getMovedToLocal();    mr.setMovedToLocal(v);    yield v; }
-            case "movedToPre"      -> { boolean v = !mr.getMovedToPre();      mr.setMovedToPre(v);      yield v; }
-            case "movedToIdc"      -> { boolean v = !mr.getMovedToIdc();      mr.setMovedToIdc(v);      yield v; }
-            case "canIgnore"       -> { boolean v = !mr.getCanIgnore();       mr.setCanIgnore(v);       yield v; }
-            case "stepWaiting"     -> { boolean v = !mr.getStepWaiting();     mr.setStepWaiting(v);     yield v; }
-            case "stepReviewed"    -> { boolean v = !mr.getStepReviewed();    mr.setStepReviewed(v);    yield v; }
-            case "stepDiScheduled" -> { boolean v = !mr.getStepDiScheduled(); mr.setStepDiScheduled(v); yield v; }
-            case "stepDiCompleted" -> { boolean v = !mr.getStepDiCompleted(); mr.setStepDiCompleted(v); yield v; }
-            case "stepGtm"         -> { boolean v = !mr.getStepGtm();         mr.setStepGtm(v);         yield v; }
-            case "stepRtm"         -> { boolean v = !mr.getStepRtm();         mr.setStepRtm(v);         yield v; }
-            case "stepMerged"      -> { boolean v = !mr.getStepMerged();      mr.setStepMerged(v);      yield v; }
+            case "canIgnore" -> { boolean v = !mr.getCanIgnore(); mr.setCanIgnore(v); yield v; }
             default -> throw new IllegalArgumentException("Unknown field: " + field);
         };
     }

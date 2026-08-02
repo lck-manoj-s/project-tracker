@@ -80,13 +80,12 @@
 <div class="card shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover table-bordered mb-0" id="tasksTable">
+            <table class="table table-hover table-bordered table-sm mb-0" id="tasksTable">
                 <thead>
                     <tr>
                         <th>#</th>
                         <th>Description</th>
-                        <th>Payroll MR</th>
-                        <th>Books MR</th>
+                        <th>MRs</th>
                         <th>Priority</th>
                         <%-- <th>Due Date</th> --%>
                         <th>Status</th>
@@ -98,7 +97,7 @@
                     <c:choose>
                         <c:when test="${empty tasks}">
                             <tr>
-                                <td colspan="8" class="text-center text-muted py-4">
+                                <td colspan="7" class="text-center text-muted py-4">
                                     <i class="bi bi-inbox fs-4 d-block mb-1"></i>No tasks found
                                 </td>
                             </tr>
@@ -110,34 +109,20 @@
                                     <td>${task.description}</td>
                                     <td>
                                         <c:choose>
-                                            <c:when test="${task.payrollMr != null}">
-                                                <a href="${task.payrollMr.mr}" target="_blank"
-                                                   class="badge bg-warning text-dark text-decoration-none"
-                                                   onclick="event.stopPropagation()">
-                                                    <i class="bi bi-box-arrow-up-right me-1"></i>${task.payrollMr.mrNumber}
-                                                </a>
-                                                <button class="copy-mr-btn" data-mr="${task.payrollMr.mrNumber}"
-                                                        onclick="event.stopPropagation(); copyMr(this)" title="Copy MR number">
-                                                    <i class="bi bi-clipboard"></i>
-                                                </button>
+                                            <c:when test="${empty task.mergeRequests}">
+                                                <span class="text-muted small">&#8212;</span>
                                             </c:when>
-                                            <c:otherwise><span class="text-muted small">&#8212;</span></c:otherwise>
-                                        </c:choose>
-                                    </td>
-                                    <td>
-                                        <c:choose>
-                                            <c:when test="${task.booksMr != null}">
-                                                <a href="${task.booksMr.mr}" target="_blank"
-                                                   class="badge bg-info text-dark text-decoration-none"
-                                                   onclick="event.stopPropagation()">
-                                                    <i class="bi bi-box-arrow-up-right me-1"></i>${task.booksMr.mrNumber}
-                                                </a>
-                                                <button class="copy-mr-btn" data-mr="${task.booksMr.mrNumber}"
-                                                        onclick="event.stopPropagation(); copyMr(this)" title="Copy MR number">
-                                                    <i class="bi bi-clipboard"></i>
-                                                </button>
-                                            </c:when>
-                                            <c:otherwise><span class="text-muted small">&#8212;</span></c:otherwise>
+                                            <c:otherwise>
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    <c:forEach var="mr" items="${task.mergeRequests}">
+                                                        <a href="${mr.mr}" target="_blank"
+                                                           class="badge ${mr.product.name() == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} text-decoration-none"
+                                                           onclick="event.stopPropagation()">
+                                                            <i class="bi bi-box-arrow-up-right me-1"></i>${mr.mrNumber}
+                                                        </a>
+                                                    </c:forEach>
+                                                </div>
+                                            </c:otherwise>
                                         </c:choose>
                                     </td>
                                     <td>
@@ -284,10 +269,9 @@
         <div class="table-responsive">
             <table class="table table-hover table-bordered table-sm mb-0" id="panelTable">
                 <thead>
-                    <tr>
+                    <tr id="panelHeadRow">
                         <th style="width:130px;">Field</th>
-                        <th><span class="badge bg-warning text-dark me-1">Payroll</span> MR</th>
-                        <th><span class="badge bg-info text-dark me-1">Books</span> MR</th>
+                        <!-- MR columns filled by JS -->
                     </tr>
                 </thead>
                 <tbody id="panelBody">
@@ -310,6 +294,7 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
 
     const panel     = document.getElementById('mrPanel');
     const panelBody = document.getElementById('panelBody');
+    const panelHead = document.getElementById('panelHeadRow');
 
     document.querySelectorAll('.task-row').forEach(function (row) {
         row.addEventListener('click', function () {
@@ -329,57 +314,61 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
 
     window.hidePanel = function () { panel.style.display = 'none'; };
 
+    function productBadgeClass(product) {
+        return product === 'Payroll' ? 'bg-warning text-dark' : 'bg-info text-dark';
+    }
+
     function renderPanel(data) {
         document.getElementById('panelTaskId').textContent   = data.taskId;
         document.getElementById('panelTaskDesc').textContent = data.description;
 
-        var p = data.payrollMr;
-        var b = data.booksMr;
+        var mrs = data.mrs || [];
+
+        // Header: one column per linked MR (product-colored)
+        panelHead.innerHTML = '<th style="width:130px;">Field</th>' + mrs.map(function (mr) {
+            return '<th><span class="badge ' + productBadgeClass(mr.product) + ' me-1">' + mr.product + '</span> MR</th>';
+        }).join('');
+
+        if (!mrs.length) {
+            panelBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-3">No MRs linked to this task</td></tr>';
+            panel.style.display = 'block';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+        }
 
         var rows = [
-            { label: 'MR',         pVal: mrLinkCell(p),   bVal: mrLinkCell(b) },
-            { label: 'Name',       pVal: nameCell(p),     bVal: nameCell(b) },
-            { label: 'Pipeline',   pVal: pipeline(p),     bVal: pipeline(b) },
-            { label: 'Linked',     pVal: linkedBadge(p),  bVal: linkedBadge(b) },
-            { label: 'Deployment', pVal: deployment(p),   bVal: deployment(b) },
-            { label: 'Created',    pVal: createdCell(p),  bVal: createdCell(b) }
+            { label: 'MR',         fn: mrLinkCell },
+            { label: 'Name',       fn: nameCell },
+            { label: 'Pipeline',   fn: pipeline },
+            { label: 'Linked',     fn: linkedBadge },
+            { label: 'Created',    fn: createdCell }
         ];
 
         panelBody.innerHTML = rows.map(function (r) {
-            return '<tr>'
-                + '<td class="fw-semibold text-nowrap align-middle">' + r.label + '</td>'
-                + '<td class="align-middle">' + (r.pVal || na()) + '</td>'
-                + '<td class="align-middle">' + (r.bVal || na()) + '</td>'
-                + '</tr>';
+            var cells = mrs.map(function (mr) {
+                return '<td class="align-middle">' + (r.fn(mr) || na()) + '</td>';
+            }).join('');
+            return '<tr><td class="fw-semibold text-nowrap align-middle">' + r.label + '</td>' + cells + '</tr>';
         }).join('');
 
-        // Wire up pipeline step clicks — each step is an independent toggle
+        // Wire up pipeline step clicks — clicking a stage jumps the MR directly to it
         panelBody.querySelectorAll('.pipeline-step').forEach(function (s) {
             s.addEventListener('click', function (e) {
                 e.stopPropagation();
-                var mrId    = s.closest('[data-mr-id]').dataset.mrId;
-                var field   = s.dataset.field;
-                var wasDone = s.classList.contains('ps-done');
-                applyStep(s, !wasDone); // optimistic
-                fetch('/mrs/' + mrId + '/toggle/' + field, { method: 'POST' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) { applyStep(s, d.newValue); })
-                    .catch(function () { applyStep(s, wasDone); }); // revert on error
-            });
-        });
+                var container = s.closest('.panel-steps');
+                var mrId      = container.dataset.mrId;
+                var status    = s.dataset.status;
+                var prevStatus = 'NEW';
+                PIPELINE_STAGES.forEach(function (st) {
+                    var el = container.querySelector('[data-status="' + st + '"]');
+                    if (el && el.classList.contains('ps-done')) prevStatus = st;
+                });
 
-        // Wire up deployment toggle clicks
-        panelBody.querySelectorAll('.toggle-step').forEach(function (s) {
-            s.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var mrId    = s.dataset.mrId;
-                var field   = s.dataset.field;
-                var wasDone = s.classList.contains('ps-done');
-                applyStep(s, !wasDone);
-                fetch('/mrs/' + mrId + '/toggle/' + field, { method: 'POST' })
-                    .then(function (r) { return r.json(); })
-                    .then(function (d) { applyStep(s, d.newValue); })
-                    .catch(function ()  { applyStep(s, wasDone); });
+                applyPipelineStatus(container, status); // optimistic
+                fetch('/mrs/' + mrId + '/status/' + status, { method: 'POST' })
+                    .then(function (r) { if (!r.ok) throw new Error('Update failed'); return r.json(); })
+                    .then(function (d) { applyPipelineStatus(container, d.status); })
+                    .catch(function () { applyPipelineStatus(container, prevStatus); });
             });
         });
 
@@ -390,6 +379,16 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
     function applyStep(el, isDone) {
         el.classList.toggle('ps-done', isDone);
         el.classList.toggle('ps-todo', !isDone);
+    }
+
+    // Pipeline stage order — used to redraw an entire MR's badges from a single status value
+    var PIPELINE_STAGES = ['NEW', 'REVIEWED', 'DI_COMPLETED', 'GTM', 'RTM', 'MERGED'];
+
+    function applyPipelineStatus(container, status) {
+        var idx = PIPELINE_STAGES.indexOf(status);
+        container.querySelectorAll('.pipeline-step').forEach(function (s) {
+            applyStep(s, PIPELINE_STAGES.indexOf(s.dataset.status) <= idx);
+        });
     }
 
     function na() { return '<span class="text-muted">—</span>'; }
@@ -412,19 +411,18 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
     function pipeline(mr) {
         if (!mr) return null;
         var steps = [
-            { field: 'stepWaiting',     label: 'W',   title: 'Waiting for Thumbs Up', val: mr.stepWaiting },
-            { field: 'stepReviewed',    label: 'R',   title: 'Reviewed',              val: mr.stepReviewed },
-            { field: 'stepDiScheduled', label: 'DI-S',title: 'DI Scheduled',          val: mr.stepDiScheduled },
-            { field: 'stepDiCompleted', label: 'DI',  title: 'DI Completed',          val: mr.stepDiCompleted },
-            { field: 'stepGtm',         label: 'GTM', title: 'GTM',                   val: mr.stepGtm },
-            { field: 'stepRtm',         label: 'RTM', title: 'RTM',                   val: mr.stepRtm },
-            { field: 'stepMerged',      label: 'M',   title: 'Merged',                val: mr.stepMerged }
+            { status: 'NEW',          label: 'N',   title: 'New',                   val: mr.stepNew },
+            { status: 'REVIEWED',     label: 'R',   title: 'Reviewed',              val: mr.stepReviewed },
+            { status: 'DI_COMPLETED', label: 'DI',  title: 'DI Completed',          val: mr.stepDiCompleted },
+            { status: 'GTM',          label: 'GTM', title: 'GTM',                   val: mr.stepGtm },
+            { status: 'RTM',          label: 'RTM', title: 'RTM',                   val: mr.stepRtm },
+            { status: 'MERGED',       label: 'M',   title: 'Merged',                val: mr.stepMerged }
         ];
         var html = '<div class="panel-steps" data-mr-id="' + mr.mrSerialNumber + '">';
         steps.forEach(function(s, i) {
             if (i > 0) html += arrow();
             html += '<span class="ps pipeline-step ' + (s.val ? 'ps-done' : 'ps-todo') + '" '
-                  + 'data-field="' + s.field + '" style="cursor:pointer;" title="' + s.title + '">'
+                  + 'data-status="' + s.status + '" style="cursor:pointer;" title="' + s.title + '">'
                   + s.label + '</span>';
         });
         html += '</div>';
@@ -438,27 +436,11 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
         return '<span class="badge ' + cls + '">' + v + '</span>';
     }
 
-    function toggleStep(done, label, mrId, field) {
-        return '<span class="ps toggle-step ' + (done ? 'ps-done' : 'ps-todo') + '" '
-             + 'data-mr-id="' + mrId + '" data-field="' + field + '" '
-             + 'style="cursor:pointer;" title="Click to toggle">'
-             + label + '</span>';
-    }
-
     function createdCell(mr) {
         if (!mr || !mr.createdAt) return null;
         return '<span class="text-muted small">' + mr.createdAt + '</span>';
     }
 
-    function deployment(mr) {
-        if (!mr) return null;
-        var id = mr.mrSerialNumber;
-        return '<div class="panel-steps">'
-            + toggleStep(mr.movedToLocal, 'Local', id, 'movedToLocal') + arrow()
-            + toggleStep(mr.movedToPre,   'Pre',   id, 'movedToPre')   + arrow()
-            + toggleStep(mr.movedToIdc,   'IDC',   id, 'movedToIdc')
-            + '</div>';
-    }
 }());
 </script>
 

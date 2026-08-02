@@ -1,6 +1,7 @@
 package com.manoj.tasksmr.specification;
 
 import com.manoj.tasksmr.dto.MrFilterDTO;
+import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.model.MergeRequest;
 import jakarta.persistence.criteria.*;
 import jakarta.persistence.criteria.JoinType;
@@ -46,21 +47,15 @@ public class MrSpecification {
                 predicates.add(cb.equal(root.get("mrLinked"), filter.getMrLinked()));
             }
 
-            // Filter 5: merged state — exact stepMerged match or exclude-merged default
+            // Filter 5: merged state — status == MERGED (or != MERGED) rather than a boolean column
             if (filter.getStepMerged() != null) {
-                predicates.add(cb.equal(root.get("stepMerged"), filter.getStepMerged()));
+                if (Boolean.TRUE.equals(filter.getStepMerged())) {
+                    predicates.add(cb.equal(root.get("status"), MrStatus.MERGED));
+                } else {
+                    predicates.add(cb.notEqual(root.get("status"), MrStatus.MERGED));
+                }
             } else if (Boolean.TRUE.equals(filter.getExcludeMerged())) {
-                predicates.add(cb.equal(root.get("stepMerged"), false));
-            }
-
-            if (filter.getMovedToLocal() != null) {
-                predicates.add(cb.equal(root.get("movedToLocal"), filter.getMovedToLocal()));
-            }
-            if (filter.getMovedToPre() != null) {
-                predicates.add(cb.equal(root.get("movedToPre"), filter.getMovedToPre()));
-            }
-            if (filter.getMovedToIdc() != null) {
-                predicates.add(cb.equal(root.get("movedToIdc"), filter.getMovedToIdc()));
+                predicates.add(cb.notEqual(root.get("status"), MrStatus.MERGED));
             }
 
             if (filter.getCanIgnore() != null) {

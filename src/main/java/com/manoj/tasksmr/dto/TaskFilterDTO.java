@@ -22,11 +22,13 @@ public class TaskFilterDTO {
     private Priority priority;
 
     /**
-     * Filter by MR presence:
-     *  PAYROLL_ONLY  - has payrollMr but no booksMr
-     *  BOOKS_ONLY    - has booksMr but no payrollMr
-     *  BOTH          - has both
+     * Filter by which products the task's linked MRs belong to:
+     *  PAYROLL_ONLY  - has >=1 Payroll MR and no Books MR
+     *  BOOKS_ONLY    - has >=1 Books MR and no Payroll MR
+     *  BOTH          - has >=1 of each
+     *  NONE          - has no MRs at all
      *  null          - no filter
+     * A task may have any number of MRs of either product.
      */
     private String mrPresence;
 

@@ -1,6 +1,7 @@
 package com.manoj.tasksmr.model;
 
 import com.manoj.tasksmr.enums.Priority;
+import com.manoj.tasksmr.enums.Product;
 import com.manoj.tasksmr.enums.TaskStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -11,6 +12,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "tasks")
@@ -27,13 +29,21 @@ public class Task {
     @Column(name = "description", nullable = false, columnDefinition = "TEXT")
     private String description;
 
-    @ManyToOne
-    @JoinColumn(name = "payroll_mr_id")
-    private MergeRequest payrollMr;
+    /**
+     * MRs linked to this task — any number, irrespective of product.
+     * Owning side is MergeRequest.task (task_id FK on merge_requests).
+     * EAGER so JSPs/controllers can read it outside an explicit transaction
+     * (consistent with this app's simple, non-lazy style elsewhere).
+     */
+    @OneToMany(mappedBy = "task", fetch = FetchType.EAGER)
+    private List<MergeRequest> mergeRequests;
 
-    @ManyToOne
-    @JoinColumn(name = "books_mr_id")
-    private MergeRequest booksMr;
+    /** Convenience: linked MRs for a given product (e.g. for legacy-style payroll/books display). */
+    @Transient
+    public List<MergeRequest> getMrsByProduct(Product product) {
+        return mergeRequests == null ? List.of()
+                : mergeRequests.stream().filter(mr -> mr.getProduct() == product).toList();
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false)

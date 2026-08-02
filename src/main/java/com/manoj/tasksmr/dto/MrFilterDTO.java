@@ -33,21 +33,18 @@ public class MrFilterDTO {
     private MrLinked mrLinked;
 
     /**
-     * When true, show only non-merged MRs (stepMerged = false). Default "active" view.
+     * When true, show only MRs whose status isn't MERGED. Default "active" view.
      * Mutually exclusive with stepMerged.
      */
     private Boolean excludeMerged;
 
     /**
-     * Exact filter on the stepMerged boolean.
-     * null = no filter; true = only merged; false = only non-merged.
+     * Exact filter on MR status == MERGED (kept as a boolean flag for the UI's
+     * simple "Active / All / Merged" dropdown, even though status is now an enum).
+     * null = no filter; true = only status==MERGED; false = only status!=MERGED.
      * Takes precedence over excludeMerged when set.
      */
     private Boolean stepMerged;
 
-    /** Deployment boolean filters */
-    private Boolean movedToLocal;
-    private Boolean movedToPre;
-    private Boolean movedToIdc;
     private Boolean canIgnore;
 }

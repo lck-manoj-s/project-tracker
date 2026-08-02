@@ -1,6 +1,7 @@
 package com.manoj.tasksmr.service;
 
 import com.manoj.tasksmr.dto.TaskFilterDTO;
+import com.manoj.tasksmr.dto.TaskSaveResult;
 import com.manoj.tasksmr.model.MergeRequest;
 import com.manoj.tasksmr.model.Task;
 import org.springframework.data.domain.Page;
@@ -16,13 +17,18 @@ public interface TaskService {
     Optional<Task> getTaskById(Long id);
     Task saveTask(Task task);
     void deleteTask(Long id);
-    /** Returns the task already using this MR (if any), so the caller can detect conflicts. */
-    Optional<Task> findTaskUsingPayrollMr(MergeRequest mr);
-    Optional<Task> findTaskUsingBooksMr(MergeRequest mr);
 
     /**
-     * Called after an MR is saved. If any task in MR_CREATED status has this MR assigned
-     * and ALL its associated MRs are now merged, the task is automatically moved to DONE.
+     * Saves a task and (re)assigns the given MRs (any product mix, any count) to it.
+     * Validates that none of the requested MRs already belong to a different task;
+     * if any do, nothing is persisted and the conflicts are returned in the result.
+     */
+    TaskSaveResult saveTaskWithMrs(Task task, List<Long> mrIds);
+
+    /**
+     * Called after an MR is saved/toggled. If the MR's task is in MR_CREATED status and
+     * ALL of that task's associated MRs are now merged (or marked can-ignore), the task
+     * is automatically moved to DONE.
      */
     void autoTransitionIfMerged(MergeRequest savedMr);
 }

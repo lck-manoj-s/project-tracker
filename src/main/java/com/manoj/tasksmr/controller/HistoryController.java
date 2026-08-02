@@ -1,7 +1,11 @@
 package com.manoj.tasksmr.controller;
 
+import com.manoj.tasksmr.enums.MrStatus;
+import com.manoj.tasksmr.enums.Product;
 import com.manoj.tasksmr.enums.TaskStatus;
+import com.manoj.tasksmr.model.MrStatusHistory;
 import com.manoj.tasksmr.model.TaskStatusHistory;
+import com.manoj.tasksmr.repository.MrStatusHistoryRepository;
 import com.manoj.tasksmr.repository.TaskStatusHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -18,6 +22,7 @@ import java.util.stream.Stream;
 public class HistoryController {
 
     private final TaskStatusHistoryRepository taskStatusHistoryRepo;
+    private final MrStatusHistoryRepository   mrStatusHistoryRepo;
 
     private static final int PAGE_SIZE = 25;
 
@@ -28,8 +33,19 @@ public class HistoryController {
             @RequestParam(required = false) Long   taskId,
             @RequestParam(required = false) String prevStatus,
             @RequestParam(required = false) String newStatus,
+            @RequestParam(required = false) Long   mrId,
+            @RequestParam(required = false) String product,
+            @RequestParam(required = false) String prevMrStatus,
+            @RequestParam(required = false) String newMrStatus,
             Model model) {
 
+        if ("mrs".equals(tab)) {
+            return mrHistory(page, mrId, product, prevMrStatus, newMrStatus, model);
+        }
+        return taskHistory(page, taskId, prevStatus, newStatus, model);
+    }
+
+    private String taskHistory(int page, Long taskId, String prevStatus, String newStatus, Model model) {
         TaskStatus prev = parseEnum(TaskStatus.class, prevStatus);
         TaskStatus next = parseEnum(TaskStatus.class, newStatus);
 
@@ -46,6 +62,30 @@ public class HistoryController {
         model.addAttribute("tab",        "tasks");
         model.addAttribute("prevStatus", prevStatus);
         model.addAttribute("newStatus",  newStatus);
+        return "history/list";
+    }
+
+    private String mrHistory(int page, Long mrId, String product, String prevMrStatus, String newMrStatus, Model model) {
+        MrStatus prev = parseEnum(MrStatus.class, prevMrStatus);
+        MrStatus next = parseEnum(MrStatus.class, newMrStatus);
+        Product  prod = parseEnum(Product.class, product);
+
+        Stream<MrStatusHistory> stream = mrStatusHistoryRepo.findAllOrderByChangedAtDesc().stream();
+        if (mrId != null) stream = stream.filter(h -> Objects.equals(h.getMergeRequest().getMrSerialNumber(), mrId));
+        if (prod != null) stream = stream.filter(h -> h.getMergeRequest().getProduct() == prod);
+        if (prev != null) stream = stream.filter(h -> h.getPreviousStatus() == prev);
+        if (next != null) stream = stream.filter(h -> h.getNewStatus()      == next);
+        List<MrStatusHistory> filtered = stream.toList();
+
+        addPageAttrs(model, filtered, page);
+        model.addAttribute("mrHistory",      slice(filtered, page));
+        model.addAttribute("mrStatusValues", MrStatus.values());
+        model.addAttribute("products",       Product.values());
+        model.addAttribute("mrId",           mrId);
+        model.addAttribute("tab",          "mrs");
+        model.addAttribute("product",      product);
+        model.addAttribute("prevMrStatus", prevMrStatus);
+        model.addAttribute("newMrStatus",  newMrStatus);
         return "history/list";
     }
 

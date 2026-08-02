@@ -1,10 +1,13 @@
 package com.manoj.tasksmr.service;
 
 import com.manoj.tasksmr.dto.TaskFilterDTO;
+import com.manoj.tasksmr.dto.TaskSaveResult;
+import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.enums.TaskStatus;
 import com.manoj.tasksmr.model.MergeRequest;
 import com.manoj.tasksmr.model.Task;
 import com.manoj.tasksmr.model.TaskStatusHistory;
+import com.manoj.tasksmr.repository.MergeRequestRepository;
 import com.manoj.tasksmr.repository.TaskRepository;
 import com.manoj.tasksmr.repository.TaskStatusHistoryRepository;
 import com.manoj.tasksmr.specification.TaskSpecification;
@@ -14,10 +17,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +31,7 @@ public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository               taskRepository;
     private final TaskStatusHistoryRepository  taskStatusHistoryRepository;
+    private final MergeRequestRepository       mergeRequestRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -75,50 +81,77 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    public TaskSaveResult saveTaskWithMrs(Task task, List<Long> mrIds) {
+        List<String> errors = new ArrayList<>();
+        List<MergeRequest> targetMrs = new ArrayList<>();
+
+        if (mrIds != null) {
+            // De-dup while preserving order
+            Set<Long> seen = new LinkedHashSet<>(mrIds.stream().filter(java.util.Objects::nonNull).toList());
+            for (Long id : seen) {
+                MergeRequest mr = mergeRequestRepository.findById(id).orElse(null);
+                if (mr == null) continue;
+                boolean assignedElsewhere = mr.getTask() != null
+                        && (task.getTaskId() == null || !mr.getTask().getTaskId().equals(task.getTaskId()));
+                if (assignedElsewhere) {
+                    errors.add("MR #" + mr.getMrNumber() + " is already assigned to Task #"
+                            + mr.getTask().getTaskId() + ".");
+                } else {
+                    targetMrs.add(mr);
+                }
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            return new TaskSaveResult(null, errors);
+        }
+
+        Task saved = saveTask(task);
+
+        // Unlink MRs previously assigned to this task but no longer selected
+        List<MergeRequest> currentlyLinked = mergeRequestRepository.findByTask(saved);
+        Set<Long> targetIds = targetMrs.stream().map(MergeRequest::getMrSerialNumber).collect(Collectors.toSet());
+        for (MergeRequest mr : currentlyLinked) {
+            if (!targetIds.contains(mr.getMrSerialNumber())) {
+                mr.setTask(null);
+                mergeRequestRepository.save(mr);
+            }
+        }
+
+        // Link the target MRs
+        for (MergeRequest mr : targetMrs) {
+            mr.setTask(saved);
+            mergeRequestRepository.save(mr);
+        }
+
+        return new TaskSaveResult(saved, List.of());
+    }
+
+    @Override
     public void deleteTask(Long id) {
         taskRepository.deleteById(id);
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Optional<Task> findTaskUsingPayrollMr(MergeRequest mr) {
-        return taskRepository.findByPayrollMr(mr);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<Task> findTaskUsingBooksMr(MergeRequest mr) {
-        return taskRepository.findByBooksMr(mr);
-    }
-
-    @Override
     public void autoTransitionIfMerged(MergeRequest savedMr) {
-        // Collect tasks that reference this MR (as payroll or books)
-        Set<Task> candidates = new LinkedHashSet<>();
-        taskRepository.findByPayrollMr(savedMr).ifPresent(candidates::add);
-        taskRepository.findByBooksMr(savedMr).ifPresent(candidates::add);
+        Task task = savedMr.getTask();
+        if (task == null) return;
+        if (task.getStatus() != TaskStatus.MR_CREATED) return;
 
-        for (Task task : candidates) {
-            // Only auto-transition tasks currently in MR_CREATED
-            if (task.getStatus() != TaskStatus.MR_CREATED) continue;
+        List<MergeRequest> linkedMrs = mergeRequestRepository.findByTask(task);
+        if (linkedMrs.isEmpty()) return;
 
-            MergeRequest p = task.getPayrollMr();
-            MergeRequest b = task.getBooksMr();
+        boolean allDone = linkedMrs.stream()
+                .allMatch(mr -> mr.getStatus() == MrStatus.MERGED || Boolean.TRUE.equals(mr.getCanIgnore()));
 
-            boolean hasMr       = p != null || b != null;
-            boolean payrollDone = p == null || Boolean.TRUE.equals(p.getStepMerged()) || Boolean.TRUE.equals(p.getCanIgnore());
-            boolean booksDone   = b == null || Boolean.TRUE.equals(b.getStepMerged()) || Boolean.TRUE.equals(b.getCanIgnore());
-
-            if (hasMr && payrollDone && booksDone) {
-                task.setStatus(TaskStatus.DONE);
-                Task savedTask = taskRepository.save(task);
-                // Record the auto-transition in history
-                TaskStatusHistory history = new TaskStatusHistory();
-                history.setTask(savedTask);
-                history.setPreviousStatus(TaskStatus.MR_CREATED);
-                history.setNewStatus(TaskStatus.DONE);
-                taskStatusHistoryRepository.save(history);
-            }
+        if (allDone) {
+            task.setStatus(TaskStatus.DONE);
+            Task savedTask = taskRepository.save(task);
+            TaskStatusHistory history = new TaskStatusHistory();
+            history.setTask(savedTask);
+            history.setPreviousStatus(TaskStatus.MR_CREATED);
+            history.setNewStatus(TaskStatus.DONE);
+            taskStatusHistoryRepository.save(history);
         }
     }
 }

@@ -2,8 +2,8 @@ package com.manoj.tasksmr.controller;
 
 import com.manoj.tasksmr.dto.MrFilterDTO;
 import com.manoj.tasksmr.dto.TaskFilterDTO;
+import com.manoj.tasksmr.dto.TaskSaveResult;
 import com.manoj.tasksmr.enums.Priority;
-import com.manoj.tasksmr.enums.Product;
 import com.manoj.tasksmr.enums.TaskStatus;
 import com.manoj.tasksmr.model.MergeRequest;
 import com.manoj.tasksmr.model.Task;
@@ -18,8 +18,10 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Controller
@@ -112,48 +114,26 @@ public class TaskController {
     }
 
     /**
-     * Save task. MR FKs are submitted as separate Long params (payrollMrId / booksMrId)
+     * Save task. MRs are submitted as a list of ids (mrIds) — any number, any product mix —
      * rather than via @ModelAttribute binding, since Spring cannot auto-resolve entity FK
-     * from a plain numeric form value without a custom converter.
+     * collections from plain numeric form values without a custom converter.
      */
     @PostMapping("/save")
     public String saveTask(
             @ModelAttribute Task task,
-            @RequestParam(required = false) Long payrollMrId,
-            @RequestParam(required = false) Long booksMrId,
+            @RequestParam(required = false) List<Long> mrIds,
             RedirectAttributes ra) {
 
-        MergeRequest payrollMr = payrollMrId != null ? mrService.getMrById(payrollMrId).orElse(null) : null;
-        MergeRequest booksMr   = booksMrId   != null ? mrService.getMrById(booksMrId).orElse(null)   : null;
+        TaskSaveResult result = taskService.saveTaskWithMrs(task, mrIds);
 
-        // Duplicate assignment check — an MR can be linked to only one task at a time
-        if (payrollMr != null) {
-            taskService.findTaskUsingPayrollMr(payrollMr).ifPresent(existing -> {
-                if (!existing.getTaskId().equals(task.getTaskId())) {
-                    ra.addFlashAttribute("errorMessage",
-                        "Payroll MR #" + payrollMr.getMrNumber() + " is already assigned to Task #" + existing.getTaskId() + ".");
-                }
-            });
-        }
-        if (booksMr != null && !ra.getFlashAttributes().containsKey("errorMessage")) {
-            taskService.findTaskUsingBooksMr(booksMr).ifPresent(existing -> {
-                if (!existing.getTaskId().equals(task.getTaskId())) {
-                    ra.addFlashAttribute("errorMessage",
-                        "Books MR #" + booksMr.getMrNumber() + " is already assigned to Task #" + existing.getTaskId() + ".");
-                }
-            });
-        }
-
-        if (ra.getFlashAttributes().containsKey("errorMessage")) {
+        if (result.hasErrors()) {
+            ra.addFlashAttribute("errorMessage", String.join(" ", result.errors()));
             String redirect = task.getTaskId() != null
                     ? "redirect:/tasks/edit/" + task.getTaskId()
                     : "redirect:/tasks/new";
             return redirect;
         }
 
-        task.setPayrollMr(payrollMr);
-        task.setBooksMr(booksMr);
-        taskService.saveTask(task);
         return "redirect:/tasks";
     }
 
@@ -165,7 +145,7 @@ public class TaskController {
 
     /**
      * JSON endpoint for the inline MR panel.
-     * Returns the payroll and books MR details for a given task.
+     * Returns all MRs linked to a given task (any product, any count).
      */
     @GetMapping("/{id}/mrs")
     @ResponseBody
@@ -176,25 +156,25 @@ public class TaskController {
         Map<String, Object> response = new HashMap<>();
         response.put("taskId",      task.getTaskId());
         response.put("description", task.getDescription());
-        response.put("payrollMr",   mrToMap(task.getPayrollMr()));
-        response.put("booksMr",     mrToMap(task.getBooksMr()));
+        response.put("mrs", task.getMergeRequests() == null ? List.of()
+                : task.getMergeRequests().stream().map(this::mrToMap).toList());
         return ResponseEntity.ok(response);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private void populateFormModel(Model model, Task task, boolean isEdit) {
-        MrFilterDTO payrollFilter = new MrFilterDTO();
-        payrollFilter.setProduct(Product.PAYROLL);
-
-        MrFilterDTO booksFilter = new MrFilterDTO();
-        booksFilter.setProduct(Product.BOOKS);
+        // All MRs available for selection: unassigned MRs, plus any already linked to this task.
+        List<MergeRequest> allMrs = mrService.getFilteredMrs(new MrFilterDTO());
+        List<MergeRequest> availableMrs = allMrs.stream()
+                .filter(mr -> mr.getTask() == null
+                        || (task.getTaskId() != null && mr.getTask().getTaskId().equals(task.getTaskId())))
+                .toList();
 
         model.addAttribute("task",         task);
         model.addAttribute("taskStatuses", TaskStatus.values());
         model.addAttribute("priorities",   Priority.values());
-        model.addAttribute("payrollMrs",   mrService.getFilteredMrs(payrollFilter));
-        model.addAttribute("booksMrs",     mrService.getFilteredMrs(booksFilter));
+        model.addAttribute("availableMrs", availableMrs);
         model.addAttribute("isEdit",       isEdit);
     }
 
@@ -208,13 +188,9 @@ public class TaskController {
         m.put("name",            mr.getName());
         m.put("product",         mr.getProduct().getDisplayName());
         m.put("mrLinked",        mr.getMrLinked().getDisplayName());
-        m.put("movedToLocal",    mr.getMovedToLocal());
-        m.put("movedToPre",      mr.getMovedToPre());
-        m.put("movedToIdc",      mr.getMovedToIdc());
         m.put("createdAt",       mr.getCreatedAt() != null ? mr.getCreatedAt().toString().substring(0, 16).replace('T', ' ') : null);
-        m.put("stepWaiting",     mr.getStepWaiting());
+        m.put("stepNew",         mr.getStepNew());
         m.put("stepReviewed",    mr.getStepReviewed());
-        m.put("stepDiScheduled", mr.getStepDiScheduled());
         m.put("stepDiCompleted", mr.getStepDiCompleted());
         m.put("stepGtm",         mr.getStepGtm());
         m.put("stepRtm",         mr.getStepRtm());

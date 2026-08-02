@@ -138,12 +138,9 @@
                                             </span>
                                         </div>
                                         <div class="mt-1 d-flex gap-1 flex-wrap">
-                                            <c:if test="${t.payrollMr != null}">
-                                                <span class="badge bg-warning text-dark" style="font-size:.62rem;">Payroll MR #${t.payrollMr.mrSerialNumber}</span>
-                                            </c:if>
-                                            <c:if test="${t.booksMr != null}">
-                                                <span class="badge bg-info text-dark" style="font-size:.62rem;">Books MR #${t.booksMr.mrSerialNumber}</span>
-                                            </c:if>
+                                            <c:forEach var="mr" items="${t.mergeRequests}">
+                                                <span class="badge ${mr.product.name() == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'}" style="font-size:.62rem;">${mr.product.displayName} MR #${mr.mrSerialNumber}</span>
+                                            </c:forEach>
                                         </div>
                                     </li>
                                 </c:forEach>
@@ -258,7 +255,7 @@
         <div class="col-lg-5">
             <div class="card shadow-sm h-100">
                 <div class="card-header fw-semibold py-2 small">
-                    <i class="bi bi-stopwatch me-1 text-primary"></i>Avg Time per Status
+                    <i class="bi bi-stopwatch me-1 text-primary"></i>Avg Time Spent
                 </div>
                 <div class="card-body p-2" style="position:relative;height:300px;">
                     <canvas id="avgTimeChart"></canvas>
@@ -297,27 +294,98 @@
         </div>
     </div>
 
-    <%-- MR pipeline bar chart --%>
-    <div class="card shadow-sm mb-3">
-        <div class="card-header fw-semibold py-2 small">
-            <i class="bi bi-bar-chart-fill me-1 text-primary"></i>Pipeline Step Completion
-            <span class="text-muted fw-normal ms-1">(MRs with each step checked — canIgnore excluded — Payroll: ${totalPayrollMrsActive} &nbsp;|&nbsp; Books: ${totalBooksMrsActive})</span>
+    <%-- Row: Pipeline chart | Avg Time Spent chart — equal halves --%>
+    <div class="row g-3 mb-3">
+
+        <div class="col-lg-6 d-flex flex-column">
+            <div class="card shadow-sm flex-grow-1">
+                <div class="card-header fw-semibold py-2 small">
+                    <i class="bi bi-bar-chart-fill me-1 text-primary"></i>Pipeline Stages
+                    <span class="text-muted fw-normal ms-1 d-block d-xl-inline">(canIgnore excluded — Payroll: ${totalPayrollMrsActive} | Books: ${totalBooksMrsActive})</span>
+                </div>
+                <div class="card-body p-2" style="position:relative;height:280px;">
+                    <canvas id="mrStatusChart"></canvas>
+                </div>
+            </div>
         </div>
-        <div class="card-body p-2" style="position:relative;height:180px;">
-            <canvas id="mrStatusChart"></canvas>
+
+        <div class="col-lg-6 d-flex flex-column">
+            <div class="card shadow-sm flex-grow-1">
+                <div class="card-header fw-semibold py-2 small">
+                    <i class="bi bi-stopwatch me-1 text-primary"></i>Avg Time Spent
+                    <span class="text-muted fw-normal ms-1 d-block d-xl-inline">(time spent in each pipeline stage, across all MRs)</span>
+                </div>
+                <div class="card-body p-2" style="position:relative;height:280px;">
+                    <canvas id="avgMrStepChart"></canvas>
+                </div>
+            </div>
         </div>
+
     </div>
 
-    <%-- Stale MRs --%>
+    <%-- Row: Recent MR Activity | Stale MRs — equal halves --%>
     <div class="row g-3 mb-3">
-        <div class="col-lg-4 d-flex flex-column">
+
+        <div class="col-lg-6 d-flex flex-column">
+            <div class="card shadow-sm flex-grow-1 overflow-hidden">
+                <div class="card-header fw-semibold py-2 small">
+                    <i class="bi bi-clock-history me-1 text-primary"></i>Recent MR Activity
+                    <span class="text-muted fw-normal ms-1">(last 10)</span>
+                </div>
+                <div class="card-body p-0" style="max-height:340px;overflow-y:auto;">
+                    <c:choose>
+                        <c:when test="${empty recentMrActivity}">
+                            <p class="text-muted text-center py-4 mb-0 small"><i class="bi bi-inbox me-1"></i>No activity yet</p>
+                        </c:when>
+                        <c:otherwise>
+                            <ul class="list-group list-group-flush">
+                                <c:forEach var="item" items="${recentMrActivity}">
+                                    <li class="list-group-item py-2 px-3">
+                                        <div class="d-flex align-items-start gap-2">
+                                            <span class="mt-1"><i class="bi bi-git text-primary small"></i></span>
+                                            <div class="flex-grow-1" style="min-width:0;">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="small">
+                                                        <span class="badge ${item.productKey == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} me-1" style="font-size:.65rem;">${item.productKey == 'PAYROLL' ? 'Payroll' : 'Books'}</span>
+                                                        <a href="${item.entityUrl}" class="fw-semibold text-decoration-none">${item.entityLabel}</a>
+                                                        <c:if test="${not empty item.entityDesc}">
+                                                            <span class="text-muted ms-1">${item.entityDesc}</span>
+                                                        </c:if>
+                                                    </span>
+                                                    <span class="text-muted text-nowrap ms-2" style="font-size:.7rem;">${item.timeAgo}</span>
+                                                </div>
+                                                <div class="mt-1">
+                                                    <c:choose>
+                                                        <c:when test="${not empty item.previousStatus}">
+                                                            <span class="badge bg-light text-dark border" style="font-size:.65rem;">${item.previousStatus}</span>
+                                                            <i class="bi bi-arrow-right mx-1 text-muted" style="font-size:.65rem;"></i>
+                                                            <span class="badge bg-primary" style="font-size:.65rem;">${item.newStatus}</span>
+                                                        </c:when>
+                                                        <c:otherwise>
+                                                            <span class="text-muted" style="font-size:.65rem;">Created as</span>
+                                                            <span class="badge bg-primary ms-1" style="font-size:.65rem;">${item.newStatus}</span>
+                                                        </c:otherwise>
+                                                    </c:choose>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                </c:forEach>
+                            </ul>
+                        </c:otherwise>
+                    </c:choose>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 d-flex flex-column">
             <div class="card shadow-sm flex-grow-1 overflow-hidden">
                 <div class="card-header fw-semibold py-2 small">
                     <i class="bi bi-hourglass text-warning me-1"></i>Stale MRs
                     <span class="text-muted fw-normal ms-1">&gt; 3 days no change</span>
                     <span class="badge bg-secondary ms-1">${staleMrs.size()}</span>
                 </div>
-                <div class="card-body p-0 d-flex flex-column" style="overflow-y:auto;max-height:280px;">
+                <div class="card-body p-0 d-flex flex-column" style="overflow-y:auto;max-height:340px;">
                     <c:choose>
                         <c:when test="${empty staleMrs}">
                             <p class="text-muted text-center py-3 mb-0 small flex-grow-1 d-flex align-items-center justify-content-center">
@@ -327,19 +395,17 @@
                         <c:otherwise>
                             <ul class="list-group list-group-flush flex-grow-1">
                                 <c:forEach var="sm" items="${staleMrs}">
-                                    <li class="list-group-item py-1 px-2">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <span class="small">
-                                                <span class="badge ${sm.productKey == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} me-1" style="font-size:.6rem;">${sm.product}</span>
-                                                <a href="${sm.mrUrl}" target="_blank" class="fw-semibold text-decoration-none">${sm.mrNumber}</a>
-                                                <c:if test="${not empty sm.name}"><span class="text-muted ms-1">— ${sm.name}</span></c:if>
-                                            </span>
-                                            <span class="badge bg-danger ms-2 text-nowrap" style="font-size:.65rem;">${sm.daysSince}d</span>
-                                        </div>
-                                        <div class="mt-1 d-flex gap-1">
-                                            <span class="badge bg-secondary" style="font-size:.6rem;">${sm.stage}</span>
-                                            <a href="/mrs/edit/${sm.mrSerialNumber}" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto"><i class="bi bi-pencil" style="font-size:.65rem;"></i></a>
-                                        </div>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
+                                        <span class="small">
+                                            <span class="badge ${sm.productKey == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} me-1" style="font-size:.65rem;">${sm.product}</span>
+                                            <a href="${sm.mrUrl}" target="_blank" class="fw-semibold text-decoration-none">${sm.mrNumber}</a>
+                                            <span class="badge bg-secondary ms-1" style="font-size:.6rem;">${sm.stage}</span>
+                                            <c:if test="${not empty sm.name}"><span class="text-muted ms-1">— ${sm.name}</span></c:if>
+                                        </span>
+                                        <span class="d-flex align-items-center gap-1">
+                                            <span class="badge bg-danger text-nowrap" style="font-size:.65rem;">${sm.daysSince}d</span>
+                                            <a href="/mrs/edit/${sm.mrSerialNumber}" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil" style="font-size:.65rem;"></i></a>
+                                        </span>
                                     </li>
                                 </c:forEach>
                             </ul>
@@ -357,7 +423,7 @@
         <div class="col-lg-6">
             <div class="card shadow-sm h-100 overflow-hidden">
                 <div class="card-header d-flex justify-content-between align-items-center py-2 small">
-                    <span><i class="bi bi-eye-slash text-danger me-1"></i>Waiting for thumbs up <span class="text-muted fw-normal">(longest first)</span></span>
+                    <span><i class="bi bi-eye-slash text-danger me-1"></i>Waiting for Review <span class="text-muted fw-normal">(longest first)</span></span>
                     <span class="badge bg-secondary">${mrsWaitingLongest.size()}</span>
                 </div>
                 <div class="card-body p-0" style="max-height:260px;overflow-y:auto;">
@@ -372,6 +438,7 @@
                                         <span class="small">
                                             <span class="badge ${mr.productKey == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} me-1" style="font-size:.65rem;">${mr.product}</span>
                                             <a href="${mr.mrUrl}" target="_blank" class="text-decoration-none fw-semibold">${mr.mrNumber}</a>
+                                            <button class="copy-mr-btn ms-1" data-mr="${mr.mrNumber}" data-url="${mr.mrUrl}" onclick="copyMrMd(this)"><i class="bi bi-clipboard"></i></button>
                                             <c:if test="${not empty mr.name}"><span class="text-muted ms-1">— ${mr.name}</span></c:if>
                                         </span>
                                         <span class="d-flex align-items-center gap-1">
@@ -411,6 +478,7 @@
                                         <span>
                                             <span class="badge ${mr.product.name() == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} me-1" style="font-size:.65rem;">${mr.product.displayName}</span>
                                             <a href="${mr.mr}" target="_blank" class="text-decoration-none fw-semibold">${mr.mrNumber}</a>
+                                            <c:if test="${not empty mr.name}"><span class="text-muted ms-1">— ${mr.name}</span></c:if>
                                         </span>
                                         <a href="/mrs/edit/${mr.mrSerialNumber}" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil" style="font-size:.7rem;"></i></a>
                                     </li>
@@ -446,6 +514,7 @@
                                             <span class="badge ${mr.product.name() == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} me-1" style="font-size:.65rem;">${mr.product.displayName}</span>
                                             <a href="${mr.mr}" target="_blank" class="text-decoration-none fw-semibold">${mr.mrNumber}</a>
                                             <button class="copy-mr-btn ms-1" data-mr="${mr.mrNumber}" data-url="${mr.mr}" onclick="copyMrMd(this)"><i class="bi bi-clipboard"></i></button>
+                                            <c:if test="${not empty mr.name}"><span class="text-muted ms-1">— ${mr.name}</span></c:if>
                                         </span>
                                         <a href="/mrs/edit/${mr.mrSerialNumber}" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil" style="font-size:.7rem;"></i></a>
                                     </li>
@@ -476,6 +545,7 @@
                                             <span class="badge ${mr.product.name() == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} me-1" style="font-size:.65rem;">${mr.product.displayName}</span>
                                             <a href="${mr.mr}" target="_blank" class="text-decoration-none fw-semibold">${mr.mrNumber}</a>
                                             <button class="copy-mr-btn ms-1" data-mr="${mr.mrNumber}" data-url="${mr.mr}" onclick="copyMrMd(this)"><i class="bi bi-clipboard"></i></button>
+                                            <c:if test="${not empty mr.name}"><span class="text-muted ms-1">— ${mr.name}</span></c:if>
                                         </span>
                                         <a href="/mrs/edit/${mr.mrSerialNumber}" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-pencil" style="font-size:.7rem;"></i></a>
                                     </li>
@@ -503,16 +573,16 @@
     new Chart(document.getElementById('mrStatusChart'), {
         type: 'bar',
         data: {
-            labels: ['Waiting','Reviewed','DI Sched','DI Done','GTM','RTM','Merged'],
+            labels: ['New','Reviewed','DI Done','GTM','RTM','Merged'],
             datasets: [
                 {
                     label: 'Payroll (${totalPayrollMrsActive})',
-                    data: [${payrollWaiting},${payrollReviewed},${payrollDiScheduled},${payrollDiCompleted},${payrollGtm},${payrollRtm},${payrollMerged}],
+                    data: [${payrollNew},${payrollReviewed},${payrollDiCompleted},${payrollGtm},${payrollRtm},${payrollMerged}],
                     backgroundColor:'rgba(255,193,7,.75)', borderColor:'rgba(255,193,7,1)', borderWidth:1, borderRadius:3
                 },
                 {
                     label: 'Books (${totalBooksMrsActive})',
-                    data: [${booksWaiting},${booksReviewed},${booksDiScheduled},${booksDiCompleted},${booksGtm},${booksRtm},${booksMerged}],
+                    data: [${booksNew},${booksReviewed},${booksDiCompleted},${booksGtm},${booksRtm},${booksMerged}],
                     backgroundColor:'rgba(13,202,240,.75)', borderColor:'rgba(13,202,240,1)', borderWidth:1, borderRadius:3
                 }
             ]
@@ -521,7 +591,7 @@
             responsive: true, maintainAspectRatio: false,
             scales: {
                 y: { beginAtZero:true, ticks:{ precision:0, font:{size:12} }, grid:{ color:'rgba(0,0,0,.05)' } },
-                x: { grid:{ display:false }, ticks:{ font:{size:12} } }
+                x: { grid:{ display:false }, ticks:{ font:{size:11} } }
             },
             plugins: {
                 legend: { position:'bottom', labels:{ padding:10, font:{size:12}, boxWidth:14 } },
@@ -564,6 +634,45 @@
                 datalabels: {
                     anchor:'end', align:'end', color:'#6c757d', font:{size:10},
                     formatter: function(v,c){ return avgDisplays[c.dataIndex] !== '—' ? avgDisplays[c.dataIndex] : ''; }
+                }
+            }
+        }
+    });
+
+    // Avg time per MR pipeline stage — horizontal bar
+    var mrStepLabels   = [<c:forEach var="s" items="${avgMrStageData}" varStatus="vs">'${s.label}'${!vs.last?',':''}</c:forEach>];
+    var mrStepHours     = [<c:forEach var="s" items="${avgMrStageData}" varStatus="vs">${s.hours}${!vs.last?',':''}</c:forEach>];
+    var mrStepDisplays = [<c:forEach var="s" items="${avgMrStageData}" varStatus="vs">'${s.display}'${!vs.last?',':''}</c:forEach>];
+    var mrStepCounts   = [<c:forEach var="s" items="${avgMrStageData}" varStatus="vs">${s.count}${!vs.last?',':''}</c:forEach>];
+
+    new Chart(document.getElementById('avgMrStepChart'), {
+        type: 'bar',
+        data: {
+            labels: mrStepLabels,
+            datasets: [{
+                label: 'Avg lead time',
+                data: mrStepHours,
+                backgroundColor: 'rgba(25,135,84,.75)',
+                borderColor: '#198754',
+                borderWidth: 1, borderRadius: 3
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { beginAtZero:true, ticks:{ precision:0, font:{size:12} }, title:{ display:true, text:'Hours', font:{size:12} }, grid:{ color:'rgba(0,0,0,.05)' } },
+                y: { grid:{ display:false }, ticks:{ font:{size:12} } }
+            },
+            plugins: {
+                legend: { display:false },
+                tooltip: { callbacks: { label: function(c) {
+                    var cnt = mrStepCounts[c.dataIndex];
+                    return ' Avg: ' + mrStepDisplays[c.dataIndex] + ' (' + cnt + ' MR' + (cnt!==1?'s':'') + ')';
+                }}},
+                datalabels: {
+                    anchor:'end', align:'end', color:'#6c757d', font:{size:10},
+                    formatter: function(v,c){ return mrStepDisplays[c.dataIndex] !== '—' ? mrStepDisplays[c.dataIndex] : ''; }
                 }
             }
         }

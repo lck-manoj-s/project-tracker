@@ -1,8 +1,11 @@
 package com.manoj.tasksmr.service;
 
 import com.manoj.tasksmr.dto.MrFilterDTO;
+import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.model.MergeRequest;
+import com.manoj.tasksmr.model.MrStatusHistory;
 import com.manoj.tasksmr.repository.MergeRequestRepository;
+import com.manoj.tasksmr.repository.MrStatusHistoryRepository;
 import com.manoj.tasksmr.specification.MrSpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -21,8 +24,9 @@ import java.util.Optional;
 @Transactional
 public class MrServiceImpl implements MrService {
 
-    private final MergeRequestRepository mrRepository;
-    private final TaskService            taskService;
+    private final MergeRequestRepository    mrRepository;
+    private final MrStatusHistoryRepository mrStatusHistoryRepository;
+    private final TaskService               taskService;
 
     @Override
     @Transactional(readOnly = true)
@@ -84,5 +88,28 @@ public class MrServiceImpl implements MrService {
     @Transactional(readOnly = true)
     public Optional<MergeRequest> findByUrl(String mrUrl) {
         return mrRepository.findByMr(mrUrl);
+    }
+
+    @Override
+    public MrStatus updateStatus(Long mrId, MrStatus newStatus) {
+        MergeRequest mr = mrRepository.findById(mrId)
+                .orElseThrow(() -> new IllegalArgumentException("MR not found: " + mrId));
+
+        MrStatus previousStatus = mr.getStatus();
+        if (previousStatus == newStatus) {
+            return previousStatus; // no-op, nothing to record
+        }
+
+        mr.setStatus(newStatus);
+        MergeRequest saved = mrRepository.save(mr);
+        taskService.autoTransitionIfMerged(saved);
+
+        MrStatusHistory history = new MrStatusHistory();
+        history.setMergeRequest(saved);
+        history.setPreviousStatus(previousStatus);
+        history.setNewStatus(newStatus);
+        mrStatusHistoryRepository.save(history);
+
+        return newStatus;
     }
 }

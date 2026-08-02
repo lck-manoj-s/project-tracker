@@ -1,16 +1,24 @@
 package com.manoj.tasksmr.specification;
 
 import com.manoj.tasksmr.dto.TaskFilterDTO;
+import com.manoj.tasksmr.enums.MrStatus;
+import com.manoj.tasksmr.enums.Product;
+import com.manoj.tasksmr.model.MergeRequest;
 import com.manoj.tasksmr.model.Task;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  * JPA Specification builder for Task filtering.
  * To add a new filter: add a field to TaskFilterDTO and add a predicate block below.
+ *
+ * Note: since a task can now have any number of MRs (any product mix) rather than a
+ * fixed payrollMr/booksMr pair, MR-related filters below use correlated subqueries
+ * over MergeRequest (owning side of the task_id FK) instead of simple FK-null checks.
  */
 public class TaskSpecification {
 
@@ -32,48 +40,71 @@ public class TaskSpecification {
                 predicates.add(cb.equal(root.get("priority"), filter.getPriority()));
             }
 
-            // Filter 3: MR presence — FK is null/non-null, no string check needed
+            // Filter 3: MR presence — based on which products have >=1 MR linked to this task
             if (filter.getMrPresence() != null) {
+                Predicate hasPayroll = cb.greaterThan(mrCount(root, query, cb, Product.PAYROLL, null, false), 0L);
+                Predicate hasBooks   = cb.greaterThan(mrCount(root, query, cb, Product.BOOKS, null, false), 0L);
+
                 switch (filter.getMrPresence()) {
-                    case "PAYROLL_ONLY" -> predicates.add(cb.and(
-                            cb.isNotNull(root.get("payrollMr")),
-                            cb.isNull(root.get("booksMr"))
-                    ));
-                    case "BOOKS_ONLY" -> predicates.add(cb.and(
-                            cb.isNull(root.get("payrollMr")),
-                            cb.isNotNull(root.get("booksMr"))
-                    ));
-                    case "BOTH" -> predicates.add(cb.and(
-                            cb.isNotNull(root.get("payrollMr")),
-                            cb.isNotNull(root.get("booksMr"))
-                    ));
-                    case "NONE" -> predicates.add(cb.and(
-                            cb.isNull(root.get("payrollMr")),
-                            cb.isNull(root.get("booksMr"))
-                    ));
+                    case "PAYROLL_ONLY" -> predicates.add(cb.and(hasPayroll, cb.not(hasBooks)));
+                    case "BOOKS_ONLY"   -> predicates.add(cb.and(cb.not(hasPayroll), hasBooks));
+                    case "BOTH"         -> predicates.add(cb.and(hasPayroll, hasBooks));
+                    case "NONE"         -> predicates.add(cb.and(cb.not(hasPayroll), cb.not(hasBooks)));
                     default -> { /* no filter */ }
                 }
             }
 
-            // Filter 4: all associated MRs have DI completed (stepDiCompleted boolean)
+            // Filter 4: ALL associated MRs (any product) have reached (or not reached) the
+            // DI_COMPLETED pipeline stage, and the task has at least one MR. Since status is
+            // a sequential enum rather than a boolean column, "reached DI_COMPLETED" means
+            // status IN {stages with ordinal >= DI_COMPLETED}.
             if (filter.getAllDiCompleted() != null) {
-                Predicate hasMr = cb.or(
-                        cb.isNotNull(root.get("payrollMr")),
-                        cb.isNotNull(root.get("booksMr"))
-                );
                 boolean diDone = Boolean.TRUE.equals(filter.getAllDiCompleted());
-                Predicate payrollOk = cb.or(
-                        cb.isNull(root.get("payrollMr")),
-                        cb.equal(root.get("payrollMr").get("stepDiCompleted"), diDone)
-                );
-                Predicate booksOk = cb.or(
-                        cb.isNull(root.get("booksMr")),
-                        cb.equal(root.get("booksMr").get("stepDiCompleted"), diDone)
-                );
-                predicates.add(cb.and(hasMr, payrollOk, booksOk));
+                List<MrStatus> reached = statusesAtOrAfter(MrStatus.DI_COMPLETED);
+
+                Expression<Long> totalMrs   = mrCount(root, query, cb, null, null, false);
+                // "mismatched" = MRs that do NOT satisfy the requested DI-completed state
+                Expression<Long> mismatched = mrCount(root, query, cb, null, reached, !diDone);
+
+                predicates.add(cb.and(
+                        cb.greaterThan(totalMrs, 0L),
+                        cb.equal(mismatched, 0L)
+                ));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /** All MrStatus values whose ordinal is >= the given stage's ordinal (i.e. "reached or past"). */
+    private static List<MrStatus> statusesAtOrAfter(MrStatus stage) {
+        return Arrays.stream(MrStatus.values()).filter(s -> s.ordinal() >= stage.ordinal()).toList();
+    }
+
+    /**
+     * Counts MRs linked to the current task row, optionally filtered by product and/or
+     * membership in a set of statuses (with {@code negateStatusIn} to invert that check).
+     * Pass {@code null} for product/statuses to skip that part of the filter.
+     */
+    private static Expression<Long> mrCount(
+            Root<Task> taskRoot, CriteriaQuery<?> query, CriteriaBuilder cb,
+            Product product, List<MrStatus> statuses, boolean negateStatusIn) {
+
+        Subquery<Long> sub = query.subquery(Long.class);
+        Root<MergeRequest> mrRoot = sub.from(MergeRequest.class);
+        sub.select(cb.count(mrRoot));
+
+        List<Predicate> subPredicates = new ArrayList<>();
+        subPredicates.add(cb.equal(mrRoot.get("task"), taskRoot));
+        if (product != null) {
+            subPredicates.add(cb.equal(mrRoot.get("product"), product));
+        }
+        if (statuses != null) {
+            Predicate statusIn = mrRoot.get("status").in(statuses);
+            subPredicates.add(negateStatusIn ? cb.not(statusIn) : statusIn);
+        }
+        sub.where(cb.and(subPredicates.toArray(new Predicate[0])));
+
+        return sub;
     }
 }
