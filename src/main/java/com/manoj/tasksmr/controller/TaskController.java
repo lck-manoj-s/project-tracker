@@ -55,12 +55,33 @@ public class TaskController {
         return listTasksForTab("completed", null, priority, mrPresence, allDiCompleted, page, model);
     }
 
+    /** Halted & Paused tasks — parked work, its own tab alongside Active/Completed. */
+    @GetMapping("/parked")
+    public String listParkedTasks(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String mrPresence,
+            @RequestParam(required = false) String allDiCompleted,
+            @RequestParam(defaultValue = "0") int page,
+            Model model) {
+        return listTasksForTab("parked", status, priority, mrPresence, allDiCompleted, page, model);
+    }
+
+    private static final List<TaskStatus> PARKED_STATUSES = List.of(TaskStatus.HALTED, TaskStatus.PAUSED);
+
     private String listTasksForTab(String tab, String status, String priority,
             String mrPresence, String allDiCompleted, int page, Model model) {
 
         TaskFilterDTO filter = new TaskFilterDTO();
         if ("completed".equals(tab)) {
             filter.setStatus(TaskStatus.DONE);
+        } else if ("parked".equals(tab)) {
+            // Parked tab: null/empty = both Halted and Paused; specific value = exact status
+            if (status == null || status.isEmpty()) {
+                filter.setStatusIn(PARKED_STATUSES);
+            } else {
+                filter.setStatus(TaskStatus.valueOf(status));
+            }
         } else {
             // Active tab: null/empty = all non-Done; specific value = exact status
             if (status == null || status.isEmpty()) {
@@ -75,19 +96,27 @@ public class TaskController {
 
         Page<Task> taskPage = taskService.getFilteredTasks(filter, PageRequest.of(page, PAGE_SIZE));
 
-        // Active tab: status options exclude DONE. Completed tab: no status filter shown.
-        TaskStatus[] statusOptions = "active".equals(tab)
-                ? Arrays.stream(TaskStatus.values())
-                        .filter(s -> s != TaskStatus.DONE)
-                        .toArray(TaskStatus[]::new)
-                : new TaskStatus[0];
+        // Active tab: status options exclude DONE. Parked tab: just Halted/Paused. Completed: none shown.
+        TaskStatus[] statusOptions = switch (tab) {
+            case "active" -> Arrays.stream(TaskStatus.values())
+                    .filter(s -> s != TaskStatus.DONE)
+                    .toArray(TaskStatus[]::new);
+            case "parked" -> PARKED_STATUSES.toArray(TaskStatus[]::new);
+            default -> new TaskStatus[0];
+        };
+
+        String baseUrl = switch (tab) {
+            case "completed" -> "/tasks/completed";
+            case "parked"    -> "/tasks/parked";
+            default          -> "/tasks";
+        };
 
         model.addAttribute("tasks",                  taskPage.getContent());
         model.addAttribute("currentPage",            taskPage.getNumber());
         model.addAttribute("totalPages",             taskPage.getTotalPages());
         model.addAttribute("totalElements",          taskPage.getTotalElements());
         model.addAttribute("tab",                    tab);
-        model.addAttribute("baseUrl",                "completed".equals(tab) ? "/tasks/completed" : "/tasks");
+        model.addAttribute("baseUrl",                baseUrl);
         model.addAttribute("taskStatuses",           statusOptions);
         model.addAttribute("priorities",             Priority.values());
         model.addAttribute("selectedStatus",         status);
@@ -124,6 +153,7 @@ public class TaskController {
             @RequestParam(required = false) List<Long> mrIds,
             RedirectAttributes ra) {
 
+        boolean isEdit = task.getTaskId() != null;
         TaskSaveResult result = taskService.saveTaskWithMrs(task, mrIds);
 
         if (result.hasErrors()) {
@@ -134,12 +164,14 @@ public class TaskController {
             return redirect;
         }
 
+        ra.addFlashAttribute("successMessage", isEdit ? "Task updated successfully." : "Task created successfully.");
         return "redirect:/tasks";
     }
 
     @PostMapping("/delete/{id}")
-    public String deleteTask(@PathVariable Long id) {
+    public String deleteTask(@PathVariable Long id, RedirectAttributes ra) {
         taskService.deleteTask(id);
+        ra.addFlashAttribute("successMessage", "Task deleted successfully.");
         return "redirect:/tasks";
     }
 
@@ -187,6 +219,7 @@ public class TaskController {
         m.put("mr",              mr.getMr());
         m.put("name",            mr.getName());
         m.put("product",         mr.getProduct().getDisplayName());
+        m.put("productBadgeClass", mr.getProduct().getBadgeClass());
         m.put("mrLinked",        mr.getMrLinked().getDisplayName());
         m.put("createdAt",       mr.getCreatedAt() != null ? mr.getCreatedAt().toString().substring(0, 16).replace('T', ' ') : null);
         m.put("stepNew",         mr.getStepNew());
@@ -195,6 +228,17 @@ public class TaskController {
         m.put("stepGtm",         mr.getStepGtm());
         m.put("stepRtm",         mr.getStepRtm());
         m.put("stepMerged",      mr.getStepMerged());
+        m.put("deployLocal",     mr.getDeployLocal());
+        m.put("deployPre",       mr.getDeployPre());
+        m.put("deployIdc",       mr.getDeployIdc());
+        m.put("movedToLocalAt",  formatTimestamp(mr.getMovedToLocalAt()));
+        m.put("movedToPreAt",    formatTimestamp(mr.getMovedToPreAt()));
+        m.put("movedToIdcAt",    formatTimestamp(mr.getMovedToIdcAt()));
         return m;
+    }
+
+    /** Formats a LocalDateTime as "yyyy-MM-dd HH:mm" for JSON/tooltip display, or null. */
+    private static String formatTimestamp(java.time.LocalDateTime dt) {
+        return dt != null ? dt.toString().substring(0, 16).replace('T', ' ') : null;
     }
 }

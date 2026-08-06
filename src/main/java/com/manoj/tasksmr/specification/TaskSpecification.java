@@ -28,11 +28,19 @@ public class TaskSpecification {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Filter 1: by status (exact match) or excludeDone (default active view)
+            // Filter 1: by status (exact match), statusIn (membership — e.g. the Halted/Paused
+            // "parked" tab), or excludeDone (default "All Active" view). Exact match always wins;
+            // "All Active" also excludes PAUSED and HALTED — neither is actively being worked,
+            // so they shouldn't clutter the default list. All three stay reachable via the exact
+            // status choice or statusIn (Filter 1's other branches above still return them on demand).
             if (filter.getStatus() != null) {
                 predicates.add(cb.equal(root.get("status"), filter.getStatus()));
+            } else if (filter.getStatusIn() != null && !filter.getStatusIn().isEmpty()) {
+                predicates.add(root.get("status").in(filter.getStatusIn()));
             } else if (Boolean.TRUE.equals(filter.getExcludeDone())) {
                 predicates.add(cb.notEqual(root.get("status"), com.manoj.tasksmr.enums.TaskStatus.DONE));
+                predicates.add(cb.notEqual(root.get("status"), com.manoj.tasksmr.enums.TaskStatus.PAUSED));
+                predicates.add(cb.notEqual(root.get("status"), com.manoj.tasksmr.enums.TaskStatus.HALTED));
             }
 
             // Filter 2: by priority

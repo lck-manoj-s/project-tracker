@@ -1,0 +1,275 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Form pages — Task / MR / Timesheet
+   Moved out of inline <style> blocks in tasks/form.jsp, mr/form.jsp and
+   timesheet/form.jsp so the markup files only contain markup. Served as a
+   plain static file from src/main/webapp/css/ (same mechanism as
+   /favicon.svg — no Spring resource-handler config needed for a WAR-packaged
+   app). Linked from each of the three form JSPs via:
+       <link rel="stylesheet" href="/css/forms.css">
+   The three sections below don't share any selectors (task-*, mr-*,
+   timesheet-* prefixes), so one shared file is simpler than three near-
+   identical tiny files — but each section is kept separate and labeled so
+   it's still obvious which page owns which rule.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Task form (tasks/form.jsp) ─────────────────────────────────────────── */
+.task-form-container {
+    max-width: 1050px;
+    margin: 60px auto 30px;
+    padding: 0 15px;
+}
+
+.task-section-title {
+    font-size: .8rem;
+    letter-spacing: .05em;
+    color: #6c757d;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.task-section-divider {
+    margin: 20px 0;
+    opacity: 0;
+}
+
+.task-form-container .form-label {
+    margin-bottom: 5px;
+}
+
+.task-form-container .form-control,
+.task-form-container .form-select {
+    font-size: .9rem;
+}
+
+.task-form-container .card-header {
+    padding: 14px 20px;
+}
+
+.task-form-container .card-body {
+    padding: 20px;
+}
+
+/* MR Autocomplete */
+.task-mr-wrapper {
+    position: relative;
+}
+
+.task-mr-wrapper #mrList {
+    z-index: 1050;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    top: 100%;
+    left: 0;
+    border-radius: 0 0 .375rem .375rem;
+}
+
+/* Selected MR Chips */
+#mrChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+#mrChips .badge,
+#mrChips .chip {
+    font-size: .8rem;
+}
+
+/* Created Information */
+.task-created-info {
+    font-size: .8rem;
+    color: #6c757d;
+    padding: 9px 12px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: .375rem;
+}
+
+@media (max-width: 767px) {
+    .task-form-container .card-header {
+        padding: 12px;
+    }
+
+    .task-form-container .card-body {
+        padding: 15px;
+    }
+}
+
+/* ── MR form (mr/form.jsp) ──────────────────────────────────────────────── */
+.mr-form-container {
+    max-width: 1050px;
+    margin: 60px auto 30px;
+    padding: 0 15px;
+}
+
+.mr-section-title {
+    font-size: .8rem;
+    letter-spacing: .05em;
+    color: #6c757d;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.mr-section-divider {
+    margin: 20px 0;
+    opacity: 0;
+}
+
+.mr-form-container .form-label {
+    margin-bottom: 5px;
+}
+
+.mr-form-container .form-control,
+.mr-form-container .form-select {
+    font-size: .9rem;
+}
+
+.mr-deployment-history {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-height: 38px;
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: .375rem;
+}
+
+.mr-deployment-history-item {
+    flex: 1;
+    text-align: center;
+    font-size: .8rem;
+    color: #495057;
+    padding: 0 6px;
+    border-right: 1px solid #dee2e6;
+}
+
+.mr-deployment-history-item:last-child {
+    border-right: none;
+}
+
+.mr-deployment-history-item strong {
+    color: #343a40;
+    margin-right: 4px;
+}
+
+.mr-ignore-wrapper {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+}
+
+.mr-ignore-wrapper .form-check {
+    margin: 0;
+}
+
+.mr-ignore-wrapper .form-check-input:checked {
+    background-color: #5145f5;
+    border-color: #5145f5;
+}
+
+.mr-parent-wrapper {
+    position: relative;
+}
+
+.mr-parent-wrapper #parentMrList {
+    z-index: 1050;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+    top: 100%;
+    left: 0;
+    border-radius: 0 0 .375rem .375rem;
+}
+
+.mr-form-container .card-header {
+    padding: 14px 20px;
+}
+
+.mr-form-container .card-body {
+    padding: 20px;
+}
+
+@media (max-width: 767px) {
+    .mr-deployment-history {
+        flex-wrap: wrap;
+    }
+
+    .mr-deployment-history-item {
+        padding: 5px;
+    }
+
+    .mr-form-container .card-header {
+        padding: 12px;
+    }
+
+    .mr-form-container .card-body {
+        padding: 15px;
+    }
+}
+
+/* ── Timesheet form (timesheet/form.jsp) ────────────────────────────────── */
+.timesheet-form-container {
+    max-width: 1050px;
+    margin: 60px auto 30px;
+    padding: 0 15px;
+}
+
+.timesheet-section-title {
+    font-size: .8rem;
+    letter-spacing: .05em;
+    color: #6c757d;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.timesheet-section-divider {
+    margin: 20px 0;
+    opacity: 0;
+}
+
+.timesheet-form-container .form-label {
+    margin-bottom: 5px;
+}
+
+.timesheet-form-container .form-control {
+    font-size: .9rem;
+}
+
+.timesheet-form-container .card-header {
+    padding: 14px 20px;
+}
+
+.timesheet-form-container .card-body {
+    padding: 20px;
+}
+
+.timesheet-task-wrapper {
+    position: relative;
+    max-width: 500px;
+}
+
+.timesheet-task-wrapper #entryTaskList {
+    z-index: 1050;
+    max-height: 220px;
+    overflow-y: auto;
+    display: none;
+    top: 100%;
+    left: 0;
+    border-radius: 0 0 .375rem .375rem;
+}
+
+@media (max-width: 767px) {
+    .timesheet-form-container .card-header {
+        padding: 12px;
+    }
+
+    .timesheet-form-container .card-body {
+        padding: 15px;
+    }
+}

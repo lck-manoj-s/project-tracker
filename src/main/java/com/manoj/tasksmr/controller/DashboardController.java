@@ -7,16 +7,22 @@ import com.manoj.tasksmr.model.MergeRequest;
 import com.manoj.tasksmr.model.MrStatusHistory;
 import com.manoj.tasksmr.model.Task;
 import com.manoj.tasksmr.model.TaskStatusHistory;
+import com.manoj.tasksmr.model.TimeSheetEntry;
 import com.manoj.tasksmr.repository.MrStatusHistoryRepository;
 import com.manoj.tasksmr.repository.TaskStatusHistoryRepository;
 import com.manoj.tasksmr.service.MrService;
 import com.manoj.tasksmr.service.TaskService;
+import com.manoj.tasksmr.service.TimeSheetService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -27,6 +33,7 @@ public class DashboardController {
 
     private final TaskService taskService;
     private final MrService   mrService;
+    private final TimeSheetService timeSheetService;
     private final TaskStatusHistoryRepository taskStatusHistoryRepo;
     private final MrStatusHistoryRepository   mrStatusHistoryRepo;
 
@@ -42,17 +49,21 @@ public class DashboardController {
         long identifyingIssue = allTasks.stream().filter(t -> t.getStatus() == TaskStatus.IDENTIFYING_ISSUE).count();
         long fixing           = allTasks.stream().filter(t -> t.getStatus() == TaskStatus.FIXING).count();
         long mrCreated        = allTasks.stream().filter(t -> t.getStatus() == TaskStatus.MR_CREATED).count();
+        long reworking        = allTasks.stream().filter(t -> t.getStatus() == TaskStatus.REWORKING).count();
+        long halted           = allTasks.stream().filter(t -> t.getStatus() == TaskStatus.HALTED).count();
         long done             = allTasks.stream().filter(t -> t.getStatus() == TaskStatus.DONE).count();
         long paused           = allTasks.stream().filter(t -> t.getStatus() == TaskStatus.PAUSED).count();
 
+        // HALTED is treated like PAUSED throughout this dashboard — not actively worked,
+        // so excluded from attention widgets and stale-task detection below.
         List<Task> tasksNoMr = allTasks.stream()
-                .filter(t -> t.getStatus() != TaskStatus.PAUSED && t.getStatus() != TaskStatus.DONE)
+                .filter(t -> t.getStatus() != TaskStatus.PAUSED && t.getStatus() != TaskStatus.HALTED && t.getStatus() != TaskStatus.DONE)
                 .filter(t -> t.getMergeRequests() == null || t.getMergeRequests().isEmpty())
                 .toList();
 
         // DI pending = has at least one MR, and at least one linked MR not yet DI-completed
         List<Task> tasksDiPending = allTasks.stream()
-                .filter(t -> t.getStatus() != TaskStatus.DONE && t.getStatus() != TaskStatus.PAUSED)
+                .filter(t -> t.getStatus() != TaskStatus.DONE && t.getStatus() != TaskStatus.PAUSED && t.getStatus() != TaskStatus.HALTED)
                 .filter(t -> t.getMergeRequests() != null && !t.getMergeRequests().isEmpty())
                 .filter(t -> t.getMergeRequests().stream()
                         .anyMatch(mr -> !Boolean.TRUE.equals(mr.getStepDiCompleted())))
@@ -62,6 +73,14 @@ public class DashboardController {
         List<MergeRequest> allMrs = mrService.getAllMrs();
         List<MergeRequest> payrollMrs = allMrs.stream().filter(mr -> mr.getProduct() == Product.PAYROLL).toList();
         List<MergeRequest> booksMrs   = allMrs.stream().filter(mr -> mr.getProduct() == Product.BOOKS).toList();
+        // Mirrors MrController's "Other MRs" tab, which is scoped to Spend specifically for
+        // now rather than a catch-all for everything outside Payroll/Books. Rework together
+        // with MrController.OTHER_TAB_PRODUCT if that changes.
+        List<MergeRequest> otherMrs = allMrs.stream()
+                .filter(mr -> mr.getProduct() == Product.SPEND).toList();
+        // Cross-cutting count — MRs marked canIgnore, regardless of product (these are the
+        // ones excluded from payrollMrsActive/booksMrsActive/allActiveMrs and every chart below).
+        long ignorableMrs = allMrs.stream().filter(mr -> Boolean.TRUE.equals(mr.getCanIgnore())).count();
 
         // For charts and attention blocks: exclude canIgnore MRs
         List<MergeRequest> payrollMrsActive = payrollMrs.stream().filter(mr -> !mr.getCanIgnore()).toList();
@@ -125,7 +144,8 @@ public class DashboardController {
         List<Map<String, Object>> staleTasks = new ArrayList<>();
 
         for (Task t : allTasks) {
-            if (t.getStatus() == TaskStatus.DONE || t.getStatus() == TaskStatus.PAUSED) continue;
+            if (t.getStatus() == TaskStatus.DONE || t.getStatus() == TaskStatus.PAUSED
+                    || t.getStatus() == TaskStatus.HALTED) continue;
             List<TaskStatusHistory> hist = taskHistoryMap.getOrDefault(t.getTaskId(), List.of());
             LocalDateTime lastChange = hist.isEmpty() ? t.getCreatedAt() : hist.get(0).getChangedAt();
             if (lastChange != null && lastChange.isBefore(staleThreshold)) {
@@ -161,6 +181,7 @@ public class DashboardController {
                 item.put("name",           mr.getName() != null ? mr.getName() : "");
                 item.put("product",        mr.getProduct().getDisplayName());
                 item.put("productKey",     mr.getProduct().name());
+                item.put("productBadgeClass", mr.getProduct().getBadgeClass());
                 item.put("stage",          deriveStageLabel(mr));
                 item.put("daysSince",      daysSince);
                 staleMrs.add(item);
@@ -182,6 +203,7 @@ public class DashboardController {
             item.put("name",           mr.getName());
             item.put("product",        mr.getProduct().getDisplayName());
             item.put("productKey",     mr.getProduct().name());
+            item.put("productBadgeClass", mr.getProduct().getBadgeClass());
             item.put("waitDays",       waitDays);
             item.put("waitLabel",      waitDays >= 0 ? waitDays + "d" : "?");
             mrsWaitingLongest.add(item);
@@ -222,7 +244,8 @@ public class DashboardController {
         List<Map<String, Object>> avgStatusData = new ArrayList<>();
         for (TaskStatus s : new TaskStatus[]{
                 TaskStatus.YET_TO_START, TaskStatus.IDENTIFYING_ISSUE,
-                TaskStatus.FIXING, TaskStatus.MR_CREATED, TaskStatus.PAUSED}) {
+                TaskStatus.FIXING, TaskStatus.MR_CREATED, TaskStatus.REWORKING,
+                TaskStatus.HALTED, TaskStatus.PAUSED}) {
             List<Long> durations = statusDurations.get(s);
             double avgHours = durations.isEmpty() ? 0
                     : durations.stream().mapToLong(Long::longValue).average().orElse(0);
@@ -283,22 +306,122 @@ public class DashboardController {
         for (MrStatusHistory h : allMrHistory.stream().limit(10).toList()) {
             MergeRequest mr = h.getMergeRequest();
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("entityLabel",    mr.getProduct().getDisplayName() + " MR " + mr.getMrNumber());
+            item.put("entityLabel",    mr.getMrNumber());
             item.put("entityDesc",     mr.getName() != null ? truncate(mr.getName(), 50) : "");
             item.put("entityUrl",      "/mrs/edit/" + mr.getMrSerialNumber());
+            item.put("product",        mr.getProduct().getDisplayName());
             item.put("productKey",     mr.getProduct().name());
+            item.put("productBadgeClass", mr.getProduct().getBadgeClass());
             item.put("previousStatus", h.getPreviousStatus() != null ? h.getPreviousStatus().getDisplayName() : null);
             item.put("newStatus",      h.getNewStatus().getDisplayName());
             item.put("timeAgo",        timeAgo(h.getChangedAt()));
             recentMrActivity.add(item);
         }
 
+        // ── Monthly completion trend (last 6 months, current month included) ──
+        List<Map<String, Object>> tasksCompletedByMonth = monthlyCounts(
+                allTaskHistory.stream()
+                        .filter(h -> h.getNewStatus() == TaskStatus.DONE)
+                        .map(TaskStatusHistory::getChangedAt)
+                        .toList());
+
+        List<Map<String, Object>> mrsMergedByMonth = monthlyCounts(
+                allMrHistory.stream()
+                        .filter(h -> h.getNewStatus() == MrStatus.MERGED)
+                        .map(MrStatusHistory::getChangedAt)
+                        .toList());
+
+        // ── Time Sheet analytics ────────────────────────────────────────────
+        List<TimeSheetEntry> allTimeSheetEntries = timeSheetService.getAllEntries();
+
+        long totalLoggedMinutes = allTimeSheetEntries.stream()
+                .mapToLong(TimeSheetEntry::getDurationMinutes).sum();
+
+        LocalDate tsToday     = LocalDate.now();
+        LocalDate tsWeekStart = tsToday.minusDays(tsToday.getDayOfWeek().getValue() - 1L);
+        LocalDate tsWeekEnd   = tsWeekStart.plusDays(6);
+        DateTimeFormatter weekRangeFmt = DateTimeFormatter.ofPattern("dd MMM");
+        String weekRangeLabel = tsWeekStart.format(weekRangeFmt) + " – " + tsWeekEnd.format(weekRangeFmt);
+
+        long todayLoggedMinutes = allTimeSheetEntries.stream()
+                .filter(e -> e.getEntryDate().isEqual(tsToday))
+                .mapToLong(TimeSheetEntry::getDurationMinutes).sum();
+
+        List<TimeSheetEntry> thisWeekEntries = allTimeSheetEntries.stream()
+                .filter(e -> !e.getEntryDate().isBefore(tsWeekStart) && !e.getEntryDate().isAfter(tsToday))
+                .toList();
+        long weekLoggedMinutes = thisWeekEntries.stream()
+                .mapToLong(TimeSheetEntry::getDurationMinutes).sum();
+
+        long openTimeSheetEntries = allTimeSheetEntries.stream()
+                .filter(e -> e.getEndTime() == null).count();
+
+        // Hours by task — top 10 by logged time; entries with no linked task are bucketed as "Unlinked"
+        List<Map<String, Object>> hoursByTask = hoursByTaskFrom(allTimeSheetEntries);
+
+        // Hours by task, this week only — same breakdown, scoped to the current Mon–Sun week
+        List<Map<String, Object>> hoursByTaskThisWeek = hoursByTaskFrom(thisWeekEntries);
+
+        // Daily trend — last 14 days, oldest first
+        Map<LocalDate, Long> minutesByDate = allTimeSheetEntries.stream()
+                .collect(Collectors.groupingBy(TimeSheetEntry::getEntryDate,
+                        Collectors.summingLong(TimeSheetEntry::getDurationMinutes)));
+        DateTimeFormatter trendLabelFmt = DateTimeFormatter.ofPattern("dd MMM");
+        List<Map<String, Object>> dailyHoursTrend = new ArrayList<>();
+        for (int i = 13; i >= 0; i--) {
+            LocalDate d = tsToday.minusDays(i);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("label", d.format(trendLabelFmt));
+            item.put("hours", Math.round(minutesByDate.getOrDefault(d, 0L) / 60.0 * 10.0) / 10.0);
+            dailyHoursTrend.add(item);
+        }
+
+        // Per-task daily breakdown — powers the "pick a task, see daily hours" chart.
+        // Only days that actually have an entry appear (no filled-in zero gaps); entries
+        // with no linked task are excluded since there's nothing to pick in the dropdown for them.
+        Map<Long, Task> taskById = allTimeSheetEntries.stream()
+                .filter(e -> e.getTask() != null)
+                .map(TimeSheetEntry::getTask)
+                .collect(Collectors.toMap(Task::getTaskId, t -> t, (a, b) -> a));
+
+        Map<Long, List<TimeSheetEntry>> entriesByTask = allTimeSheetEntries.stream()
+                .filter(e -> e.getTask() != null)
+                .collect(Collectors.groupingBy(e -> e.getTask().getTaskId()));
+
+        DateTimeFormatter taskDayFmt = DateTimeFormatter.ofPattern("dd MMM yyyy");
+        List<Map<String, Object>> taskDailyBreakdown = new ArrayList<>();
+        for (Map.Entry<Long, List<TimeSheetEntry>> en : entriesByTask.entrySet()) {
+            Task task = taskById.get(en.getKey());
+            Map<LocalDate, Long> minutesByDay = en.getValue().stream()
+                    .collect(Collectors.groupingBy(TimeSheetEntry::getEntryDate,
+                            Collectors.summingLong(TimeSheetEntry::getDurationMinutes)));
+
+            List<Map<String, Object>> days = minutesByDay.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(dayEn -> {
+                        Map<String, Object> d = new LinkedHashMap<>();
+                        d.put("label", dayEn.getKey().format(taskDayFmt));
+                        d.put("hours", Math.round(dayEn.getValue() / 60.0 * 10.0) / 10.0);
+                        return d;
+                    })
+                    .toList();
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("taskId",    task.getTaskId());
+            item.put("taskLabel", "#" + task.getTaskId() + " " + truncate(task.getDescription(), 50));
+            item.put("days",      days);
+            taskDailyBreakdown.add(item);
+        }
+        taskDailyBreakdown.sort(Comparator.comparing(m -> (Long) m.get("taskId")));
+
         // ── Model ──────────────────────────────────────────────────────────
         // Totals
         model.addAttribute("totalTasks",       allTasks.size());
-        model.addAttribute("totalMrs",              payrollMrs.size() + booksMrs.size());
+        model.addAttribute("totalMrs",              allMrs.size());
         model.addAttribute("totalPayrollMrs",       payrollMrs.size());
         model.addAttribute("totalBooksMrs",         booksMrs.size());
+        model.addAttribute("totalOtherMrs",         otherMrs.size());
+        model.addAttribute("ignorableMrs",          ignorableMrs);
         // active (non-canIgnore) totals for chart legend
         model.addAttribute("totalPayrollMrsActive", payrollMrsActive.size());
         model.addAttribute("totalBooksMrsActive",   booksMrsActive.size());
@@ -308,6 +431,8 @@ public class DashboardController {
         model.addAttribute("identifyingIssue", identifyingIssue);
         model.addAttribute("fixing",           fixing);
         model.addAttribute("mrCreated",        mrCreated);
+        model.addAttribute("reworking",        reworking);
+        model.addAttribute("halted",           halted);
         model.addAttribute("done",             done);
         model.addAttribute("paused",           paused);
 
@@ -343,6 +468,20 @@ public class DashboardController {
         model.addAttribute("avgStatusData",      avgStatusData);
         model.addAttribute("avgMrStageData",     avgMrStageData);
         model.addAttribute("recentMrActivity",   recentMrActivity);
+        model.addAttribute("tasksCompletedByMonth", tasksCompletedByMonth);
+        model.addAttribute("mrsMergedByMonth",      mrsMergedByMonth);
+
+        // Time Sheet analytics
+        model.addAttribute("totalTimeSheetEntries", allTimeSheetEntries.size());
+        model.addAttribute("totalLoggedLabel",      formatMinutes(totalLoggedMinutes));
+        model.addAttribute("todayLoggedLabel",      formatMinutes(todayLoggedMinutes));
+        model.addAttribute("weekLoggedLabel",       formatMinutes(weekLoggedMinutes));
+        model.addAttribute("openTimeSheetEntries",  openTimeSheetEntries);
+        model.addAttribute("hoursByTask",           hoursByTask);
+        model.addAttribute("hoursByTaskThisWeek",   hoursByTaskThisWeek);
+        model.addAttribute("weekRangeLabel",        weekRangeLabel);
+        model.addAttribute("dailyHoursTrend",       dailyHoursTrend);
+        model.addAttribute("taskDailyBreakdown",    taskDailyBreakdown);
 
         return "dashboard";
     }
@@ -378,8 +517,64 @@ public class DashboardController {
         return Math.round(days / 7) + "w";
     }
 
+    /** "1h 30m" / "45m" / "2h" — mirrors TimeSheetController's helper, used for the Time Sheet dashboard tab. */
+    private String formatMinutes(long minutes) {
+        long h = minutes / 60, m = minutes % 60;
+        if (h > 0 && m > 0) return h + "h " + m + "m";
+        if (h > 0) return h + "h";
+        return m + "m";
+    }
+
+    /**
+     * Top 10 tasks by logged time within the given set of entries (entries with no linked
+     * task are bucketed as "Unlinked"). Used for both the all-time and this-week breakdowns.
+     */
+    private List<Map<String, Object>> hoursByTaskFrom(List<TimeSheetEntry> entries) {
+        Map<String, Long> minutesByTaskLabel = new LinkedHashMap<>();
+        for (TimeSheetEntry e : entries) {
+            String label = e.getTask() != null
+                    ? "#" + e.getTask().getTaskId() + " " + truncate(e.getTask().getDescription(), 30)
+                    : "Unlinked";
+            minutesByTaskLabel.merge(label, e.getDurationMinutes(), Long::sum);
+        }
+        return minutesByTaskLabel.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(10)
+                .map(en -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("label", en.getKey());
+                    m.put("hours", Math.round(en.getValue() / 60.0 * 10.0) / 10.0);
+                    return m;
+                })
+                .toList();
+    }
+
     private String truncate(String s, int max) {
         if (s == null) return "";
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
+    }
+
+    /**
+     * Buckets the given timestamps into the last 6 calendar months (oldest first,
+     * current month last), regardless of how many transitions actually land in each
+     * month. Used for the "completed per month" trend charts.
+     */
+    private List<Map<String, Object>> monthlyCounts(List<LocalDateTime> timestamps) {
+        YearMonth currentMonth = YearMonth.now();
+        List<YearMonth> months = new ArrayList<>();
+        for (int i = 5; i >= 0; i--) months.add(currentMonth.minusMonths(i));
+
+        Map<YearMonth, Long> counts = timestamps.stream()
+                .map(YearMonth::from)
+                .collect(Collectors.groupingBy(ym -> ym, Collectors.counting()));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (YearMonth ym : months) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("label", ym.getMonth().getDisplayName(TextStyle.SHORT, Locale.ENGLISH) + " " + ym.getYear());
+            item.put("count", counts.getOrDefault(ym, 0L));
+            result.add(item);
+        }
+        return result;
     }
 }

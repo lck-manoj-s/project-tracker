@@ -1,5 +1,6 @@
 package com.manoj.tasksmr.model;
 
+import com.manoj.tasksmr.enums.DeploymentStatus;
 import com.manoj.tasksmr.enums.MrLinked;
 import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.enums.Product;
@@ -29,8 +30,16 @@ public class MergeRequest {
     @Column(name = "name")
     private String name;
 
+    /*
+     * columnDefinition pins this to a plain VARCHAR. Without it, Hibernate 6 generates a
+     * native MySQL ENUM(...) column listing only the constants that existed in the Product
+     * enum at the time the column was first created. ddl-auto=update never widens an
+     * existing column's allowed values when the Java enum gains a new constant (e.g. SPEND),
+     * so MySQL rejects/truncates any row using a value outside that original list. VARCHAR
+     * has no such constraint, so future products never need a matching DB migration.
+     */
     @Enumerated(EnumType.STRING)
-    @Column(name = "product", nullable = false)
+    @Column(name = "product", nullable = false, columnDefinition = "VARCHAR(30)")
     private Product product;
 
     @ManyToOne
@@ -53,6 +62,16 @@ public class MergeRequest {
     private Boolean canIgnore = false;
 
     /**
+     * Current deployment stage — a single current-value status (like {@code status}),
+     * shown in Local -> Pre -> IDC order wherever the MR is editable. Deployment is
+     * treated as a strict, sequential progression (reaching IDC implies Local and Pre
+     * were reached too), same modeling as the pipeline stage.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "deployment_status", nullable = false)
+    private DeploymentStatus deploymentStatus = DeploymentStatus.NONE;
+
+    /**
      * Current pipeline stage — a single current-value status (like Task.status),
      * tracked over time via MrStatusHistory. Pipeline stages are sequential
      * (see MrStatus for the declared order).
@@ -64,6 +83,20 @@ public class MergeRequest {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    // ── Deployment stage timestamps ───────────────────────────────────────────
+    // Set once, the first time the MR reaches each deployment stage (via the
+    // badge click endpoint or the edit form). Not cleared if the MR is later
+    // moved backward, so these always answer "when did this MR first reach
+    // stage X" even if its current deploymentStatus has since regressed.
+    @Column(name = "moved_to_local_at")
+    private LocalDateTime movedToLocalAt;
+
+    @Column(name = "moved_to_pre_at")
+    private LocalDateTime movedToPreAt;
+
+    @Column(name = "moved_to_idc_at")
+    private LocalDateTime movedToIdcAt;
 
     /** Returns the last path segment of mr URL (e.g. "152865"). */
     @Transient
@@ -90,6 +123,25 @@ public class MergeRequest {
     @Transient public boolean getStepGtm()         { return isStageReached(MrStatus.GTM); }
     @Transient public boolean getStepRtm()         { return isStageReached(MrStatus.RTM); }
     @Transient public boolean getStepMerged()      { return isStageReached(MrStatus.MERGED); }
+
+    // ── Deployment step view helpers ──────────────────────────────────────────
+    // Derived from `deploymentStatus`, same ordinal-comparison pattern as the
+    // pipeline steps above (NONE -> LOCAL -> PRE -> IDC).
+    @Transient public boolean isDeployStageReached(DeploymentStatus stage) { return deploymentStatus != null && deploymentStatus.ordinal() >= stage.ordinal(); }
+    @Transient public boolean getDeployLocal() { return isDeployStageReached(DeploymentStatus.LOCAL); }
+    @Transient public boolean getDeployPre()   { return isDeployStageReached(DeploymentStatus.PRE); }
+    @Transient public boolean getDeployIdc()   { return isDeployStageReached(DeploymentStatus.IDC); }
+
+    /** Returns the recorded first-reached timestamp for a deployment stage, or null if not reached yet. */
+    @Transient
+    public LocalDateTime getDeployStageTimestamp(DeploymentStatus stage) {
+        return switch (stage) {
+            case LOCAL -> movedToLocalAt;
+            case PRE   -> movedToPreAt;
+            case IDC   -> movedToIdcAt;
+            case NONE  -> null;
+        };
+    }
 
     private static String extractLastSegment(String url) {
         if (url == null || url.isBlank()) return null;

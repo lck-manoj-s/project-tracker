@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * DTO for filtering Tasks.
  * Add new filter fields here as the application grows.
@@ -43,4 +45,10 @@ public class TaskFilterDTO {
      * Used as the default view (active tasks only).
      */
     private Boolean excludeDone;
+
+    /**
+     * Filter by membership in a set of statuses (e.g. the Halted/Paused "parked" tab).
+     * Only applied when {@code status} is null — an exact status choice always wins.
+     */
+    private List<TaskStatus> statusIn;
 }

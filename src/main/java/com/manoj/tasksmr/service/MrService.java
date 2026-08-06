@@ -1,6 +1,7 @@
 package com.manoj.tasksmr.service;
 
 import com.manoj.tasksmr.dto.MrFilterDTO;
+import com.manoj.tasksmr.enums.DeploymentStatus;
 import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.model.MergeRequest;
 import org.springframework.data.domain.Page;
@@ -25,4 +26,11 @@ public interface MrService {
      * requested status equals the current one. Returns the MR's status after the update.
      */
     MrStatus updateStatus(Long mrId, MrStatus newStatus);
+
+    /**
+     * Sets the MR's current deployment stage (clicking a deployment step in the UI jumps
+     * directly to that stage — forward or backward). No history tracking, unlike
+     * {@link #updateStatus}. Returns the MR's deployment status after the update.
+     */
+    DeploymentStatus updateDeploymentStatus(Long mrId, DeploymentStatus newStatus);
 }

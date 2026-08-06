@@ -1,6 +1,7 @@
 package com.manoj.tasksmr.controller;
 
 import com.manoj.tasksmr.dto.MrFilterDTO;
+import com.manoj.tasksmr.enums.DeploymentStatus;
 import com.manoj.tasksmr.enums.MrLinked;
 import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.enums.Product;
@@ -40,6 +41,18 @@ public class MrController {
 
     private static final int MR_PAGE_SIZE = 10;
 
+    /** Products with their own dedicated tab that filters by exact product match. */
+    private static final List<Product> TABBED_PRODUCTS = List.of(Product.PAYROLL, Product.BOOKS);
+
+    /**
+     * The "Other MRs" tab is scoped to exactly this product for now, rather than being a
+     * catch-all for everything outside TABBED_PRODUCTS (which is how it worked before, and
+     * how the mr/list.jsp per-row product badge / showProductBadge plumbing still supports
+     * it being made a catch-all again). Revisit this if/when a product beyond Spend needs
+     * its own visibility here — see listOtherMrs() and tabForProduct() below.
+     */
+    private static final Product OTHER_TAB_PRODUCT = Product.SPEND;
+
     /** /mrs → redirect to Payroll tab */
     @GetMapping
     public String redirectToPayroll() {
@@ -52,11 +65,12 @@ public class MrController {
             @RequestParam(required = false) String parentMrProduct,
             @RequestParam(required = false) String mrLinked,
             @RequestParam(required = false) String merged,
+            @RequestParam(required = false) String deployment,
             @RequestParam(required = false) String canIgnore,
             @RequestParam(defaultValue = "0") int page,
             Model model) {
-        return listMrsForProduct(Product.PAYROLL, "/mrs/payroll",
-                hasParentMr, parentMrProduct, mrLinked, merged,
+        return listMrs(Product.PAYROLL, null, "payroll", "/mrs/payroll",
+                hasParentMr, parentMrProduct, mrLinked, merged, deployment,
                 canIgnore, page, model);
     }
 
@@ -66,26 +80,54 @@ public class MrController {
             @RequestParam(required = false) String parentMrProduct,
             @RequestParam(required = false) String mrLinked,
             @RequestParam(required = false) String merged,
+            @RequestParam(required = false) String deployment,
             @RequestParam(required = false) String canIgnore,
             @RequestParam(defaultValue = "0") int page,
             Model model) {
-        return listMrsForProduct(Product.BOOKS, "/mrs/books",
-                hasParentMr, parentMrProduct, mrLinked, merged,
+        return listMrs(Product.BOOKS, null, "books", "/mrs/books",
+                hasParentMr, parentMrProduct, mrLinked, merged, deployment,
                 canIgnore, page, model);
     }
 
-    private String listMrsForProduct(Product product, String baseUrl,
+    /**
+     * "Other MRs" tab — for now, an exact-match tab scoped to OTHER_TAB_PRODUCT (Spend), not
+     * a catch-all. showProductBadge will be false here, same as Payroll/Books, since exactly
+     * one product is shown.
+     */
+    @GetMapping("/other")
+    public String listOtherMrs(
+            @RequestParam(required = false) String hasParentMr,
+            @RequestParam(required = false) String parentMrProduct,
+            @RequestParam(required = false) String mrLinked,
+            @RequestParam(required = false) String merged,
+            @RequestParam(required = false) String deployment,
+            @RequestParam(required = false) String canIgnore,
+            @RequestParam(defaultValue = "0") int page,
+            Model model) {
+        return listMrs(OTHER_TAB_PRODUCT, null, "other", "/mrs/other",
+                hasParentMr, parentMrProduct, mrLinked, merged, deployment,
+                canIgnore, page, model);
+    }
+
+    /**
+     * Shared list-page builder for all three tabs. Exactly one of {@code exactProduct} /
+     * {@code excludeProducts} is populated by the callers above: the Payroll/Books tabs pass
+     * an exact product, the Other tab passes the exclusion list instead.
+     */
+    private String listMrs(Product exactProduct, List<Product> excludeProducts, String activeTab, String baseUrl,
             String hasParentMr, String parentMrProduct, String mrLinked,
-            String merged,
+            String merged, String deployment,
             String canIgnore, int page, Model model) {
 
         // Default canIgnore to "false" (exclude canIgnore MRs); "all" means no filter
         String effectiveCanIgnore = notBlank(canIgnore) ? canIgnore : "false";
-        // Default merged to "false" (show only active/non-merged); "all" = no filter; "true" = merged only
-        String effectiveMerged = notBlank(merged) ? merged : "false";
+        // Default merged to "all" (no filter); "false" = active/non-merged only; "true" = merged only
+        String effectiveMerged = notBlank(merged) ? merged : "all";
+        // Default deployment to "notIdc" (hide MRs already at IDC); "local"/"pre"/"idc" = exact stage only
+        String effectiveDeployment = notBlank(deployment) ? deployment : "notIdc";
 
-        MrFilterDTO filter = buildFilter(product,
-                hasParentMr, parentMrProduct, mrLinked, effectiveMerged,
+        MrFilterDTO filter = buildFilter(exactProduct, excludeProducts,
+                hasParentMr, parentMrProduct, mrLinked, effectiveMerged, effectiveDeployment,
                 effectiveCanIgnore);
 
         Page<MergeRequest> mrPage = mrService.getFilteredMrsPaged(filter, page, MR_PAGE_SIZE);
@@ -95,7 +137,10 @@ public class MrController {
         model.addAttribute("totalPages",    mrPage.getTotalPages());
         model.addAttribute("totalElements", mrPage.getTotalElements());
 
-        model.addAttribute("product",        product);
+        model.addAttribute("activeTab",       activeTab);
+        // A tab with no single exact product (i.e. "Other") can mix products in one table,
+        // so its rows need their own product badge to stay legible.
+        model.addAttribute("showProductBadge", exactProduct == null);
         model.addAttribute("baseUrl",        baseUrl);
         model.addAttribute("mrLinkedValues", MrLinked.values());
         model.addAttribute("products",       Product.values());
@@ -104,9 +149,22 @@ public class MrController {
         model.addAttribute("parentMrProduct", parentMrProduct);
         model.addAttribute("mrLinked",        mrLinked);
         model.addAttribute("merged",          effectiveMerged);
+        model.addAttribute("deployment",      effectiveDeployment);
         model.addAttribute("canIgnore",       effectiveCanIgnore);
 
         return "mr/list";
+    }
+
+    /**
+     * Which tab a given product's MRs live under. Only Payroll/Books/Spend currently map to a
+     * real tab; anything else falls back to "other" so we never construct a broken redirect —
+     * but since "other" is now Spend-specific rather than a catch-all, a hypothetical future
+     * product beyond these three wouldn't actually show up on the tab it's redirected to.
+     * Rework this (and OTHER_TAB_PRODUCT above) if that's ever needed.
+     */
+    private String tabForProduct(Product product) {
+        if (TABBED_PRODUCTS.contains(product)) return product.name().toLowerCase();
+        return "other";
     }
 
     @GetMapping("/new")
@@ -125,10 +183,12 @@ public class MrController {
 
     /**
      * Save MR. Note: {@code form} is a fresh object bound only from this form's fields —
-     * it does NOT carry status, task link, or step history, so in edit mode we apply the
-     * form fields onto the persisted entity rather than saving {@code form} directly.
-     * Otherwise every edit (e.g. changing the URL) would silently reset the MR's pipeline
-     * stage back to NEW and unlink it from its task.
+     * it does NOT carry the task link, so in edit mode we apply the form fields onto the
+     * persisted entity rather than saving {@code form} directly.
+     * Otherwise every edit (e.g. changing the URL) would silently unlink it from its task.
+     * The pipeline stage IS taken from the form (the form always carries the MR's current
+     * stage as its preselected value), and {@code MrService.saveMr} records the transition
+     * in mr_status_history if it changed — same tracking as clicking a pipeline stage badge.
      */
     @PostMapping("/save")
     public String saveMr(
@@ -153,7 +213,8 @@ public class MrController {
             return redirect;
         }
 
-        MergeRequest mr = form.getMrSerialNumber() != null
+        boolean isEdit = form.getMrSerialNumber() != null;
+        MergeRequest mr = isEdit
                 ? mrService.getMrById(form.getMrSerialNumber()).orElse(form)
                 : form;
 
@@ -161,27 +222,32 @@ public class MrController {
         mr.setName(form.getName());
         mr.setProduct(form.getProduct());
         mr.setCanIgnore(form.getCanIgnore());
+        mr.setDeploymentStatus(form.getDeploymentStatus());
         mr.setMrLinked(form.getMrLinked());
+        mr.setStatus(form.getStatus());
         mr.setParentMr(parentMrId != null ? mrService.getMrById(parentMrId).orElse(null) : null);
 
         MergeRequest saved = mrService.saveMr(mr);
-        return "redirect:/mrs/" + saved.getProduct().name().toLowerCase();
+        ra.addFlashAttribute("successMessage", isEdit ? "MR updated successfully." : "MR created successfully.");
+        return "redirect:/mrs/" + tabForProduct(saved.getProduct());
     }
 
     @PostMapping("/delete/{id}")
-    public String deleteMr(@PathVariable Long id) {
-        String product = mrService.getMrById(id)
-                .map(mr -> mr.getProduct().name().toLowerCase())
+    public String deleteMr(@PathVariable Long id, RedirectAttributes ra) {
+        String tab = mrService.getMrById(id)
+                .map(mr -> tabForProduct(mr.getProduct()))
                 .orElse("payroll");
         mrService.deleteMr(id);
-        return "redirect:/mrs/" + product;
+        ra.addFlashAttribute("successMessage", "MR deleted successfully.");
+        return "redirect:/mrs/" + tab;
     }
 
     private static final Set<String> PLAIN_TOGGLE_FIELDS = Set.of("canIgnore");
 
     /**
-     * Inline boolean toggle for deployment/canIgnore flags — called via AJAX.
-     * Returns {field, newValue}. Pipeline stage changes go through /status/{status} instead.
+     * Inline boolean toggle for canIgnore — called via AJAX. Returns {field, newValue}.
+     * Pipeline stage changes go through /status/{status}; deployment stage changes go
+     * through /deployment/{status} — neither is a plain boolean toggle.
      */
     @PostMapping("/{id}/toggle/{field}")
     @ResponseBody
@@ -231,6 +297,31 @@ public class MrController {
     }
 
     /**
+     * Sets the MR's deployment stage directly (clicking any deployment badge jumps to that
+     * stage — forward or backward). No history tracking, unlike the pipeline status.
+     */
+    @PostMapping("/{id}/deployment/{status}")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> setDeploymentStatus(
+            @PathVariable Long id,
+            @PathVariable String status) {
+
+        DeploymentStatus target;
+        try {
+            target = DeploymentStatus.valueOf(status);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        DeploymentStatus newStatus = mrService.updateDeploymentStatus(id, target);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status",      newStatus.name());
+        response.put("displayName", newStatus.getDisplayName());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * JSON endpoint for the inline parent-chain panel — mirrors the task page's
      * per-task MR panel. Returns the given MR plus every ancestor MR (parentMr,
      * parentMr.parentMr, ...), ordered oldest-ancestor-first so the clicked MR
@@ -266,6 +357,7 @@ public class MrController {
         m.put("mr",              mr.getMr());
         m.put("name",            mr.getName());
         m.put("product",         mr.getProduct().getDisplayName());
+        m.put("productBadgeClass", mr.getProduct().getBadgeClass());
         m.put("mrLinked",        mr.getMrLinked().getDisplayName());
         m.put("createdAt",       mr.getCreatedAt() != null ? mr.getCreatedAt().toString().substring(0, 16).replace('T', ' ') : null);
         m.put("stepNew",         mr.getStepNew());
@@ -274,7 +366,18 @@ public class MrController {
         m.put("stepGtm",         mr.getStepGtm());
         m.put("stepRtm",         mr.getStepRtm());
         m.put("stepMerged",      mr.getStepMerged());
+        m.put("deployLocal",     mr.getDeployLocal());
+        m.put("deployPre",       mr.getDeployPre());
+        m.put("deployIdc",       mr.getDeployIdc());
+        m.put("movedToLocalAt",  formatTimestamp(mr.getMovedToLocalAt()));
+        m.put("movedToPreAt",    formatTimestamp(mr.getMovedToPreAt()));
+        m.put("movedToIdcAt",    formatTimestamp(mr.getMovedToIdcAt()));
         return m;
+    }
+
+    /** Formats a LocalDateTime as "yyyy-MM-dd HH:mm" for JSON/tooltip display, or null. */
+    private static String formatTimestamp(java.time.LocalDateTime dt) {
+        return dt != null ? dt.toString().substring(0, 16).replace('T', ' ') : null;
     }
 
     private void populateFormModel(Model model, MergeRequest mr, boolean isEdit) {
@@ -284,24 +387,38 @@ public class MrController {
         model.addAttribute("mr",             mr);
         model.addAttribute("products",       Product.values());
         model.addAttribute("mrLinkedValues", MrLinked.values());
+        model.addAttribute("mrStatusValues", MrStatus.values());
+        model.addAttribute("deploymentStatusValues", DeploymentStatus.values());
         model.addAttribute("allMrs",         allMrs);
         model.addAttribute("isEdit",         isEdit);
     }
 
-    private MrFilterDTO buildFilter(Product product,
+    private MrFilterDTO buildFilter(Product exactProduct, List<Product> excludeProducts,
             String hasParentMr, String parentMrProduct, String mrLinked,
-            String merged,
+            String merged, String deployment,
             String canIgnore) {
 
         MrFilterDTO f = new MrFilterDTO();
-        f.setProduct(product);
+        f.setProduct(exactProduct);
+        f.setExcludedProducts(excludeProducts);
         if (notBlank(hasParentMr))     f.setHasParentMr(Boolean.valueOf(hasParentMr));
         if (notBlank(parentMrProduct)) f.setParentMrProduct(Product.valueOf(parentMrProduct));
         if (notBlank(mrLinked))        f.setMrLinked(MrLinked.valueOf(mrLinked));
 
         if (notBlank(merged) && !"all".equals(merged)) {
-            // "false" (default) = active only; "true" = merged only
+            // "all" (default) = no filter; "false" = active only; "true" = merged only
             f.setStepMerged(Boolean.valueOf(merged));
+        }
+
+        // "notIdc" (default) = hide MRs already at IDC; "local"/"pre"/"idc" = exact stage only
+        if (notBlank(deployment)) {
+            switch (deployment) {
+                case "local"  -> f.setDeploymentStatusEquals(DeploymentStatus.LOCAL);
+                case "pre"    -> f.setDeploymentStatusEquals(DeploymentStatus.PRE);
+                case "idc"    -> f.setDeploymentStatusEquals(DeploymentStatus.IDC);
+                case "notIdc" -> f.setExcludeDeploymentIdc(true);
+                default -> { /* unrecognized value — no deployment filter applied */ }
+            }
         }
 
         if (notBlank(canIgnore) && !"all".equals(canIgnore)) f.setCanIgnore(Boolean.valueOf(canIgnore));

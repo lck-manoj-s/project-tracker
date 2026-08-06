@@ -1,6 +1,7 @@
 package com.manoj.tasksmr.specification;
 
 import com.manoj.tasksmr.dto.MrFilterDTO;
+import com.manoj.tasksmr.enums.DeploymentStatus;
 import com.manoj.tasksmr.enums.MrStatus;
 import com.manoj.tasksmr.model.MergeRequest;
 import jakarta.persistence.criteria.*;
@@ -22,9 +23,15 @@ public class MrSpecification {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Filter 1: by product
+            // Filter 1: by exact product
             if (filter.getProduct() != null) {
                 predicates.add(cb.equal(root.get("product"), filter.getProduct()));
+            }
+
+            // Filter 1b: exclude specific products — backs the "Other MRs" tab (every
+            // product except the ones with their own dedicated tab).
+            if (filter.getExcludedProducts() != null && !filter.getExcludedProducts().isEmpty()) {
+                predicates.add(cb.not(root.get("product").in(filter.getExcludedProducts())));
             }
 
             // Filter 2: has parent MR or not (FK null check)
@@ -56,6 +63,13 @@ public class MrSpecification {
                 }
             } else if (Boolean.TRUE.equals(filter.getExcludeMerged())) {
                 predicates.add(cb.notEqual(root.get("status"), MrStatus.MERGED));
+            }
+
+            // Filter 6: deployment stage — exact match (Local/Pre/IDC) or "not in IDC" (default)
+            if (filter.getDeploymentStatusEquals() != null) {
+                predicates.add(cb.equal(root.get("deploymentStatus"), filter.getDeploymentStatusEquals()));
+            } else if (Boolean.TRUE.equals(filter.getExcludeDeploymentIdc())) {
+                predicates.add(cb.notEqual(root.get("deploymentStatus"), DeploymentStatus.IDC));
             }
 
             if (filter.getCanIgnore() != null) {

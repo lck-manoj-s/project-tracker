@@ -53,8 +53,15 @@ public class Task {
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate dueDate;
 
+    /*
+     * columnDefinition pins this to a plain VARCHAR, same fix as MergeRequest.product.
+     * Without it, Hibernate 6 generates a native MySQL ENUM(...) column listing only the
+     * constants that existed when the column was first created, and ddl-auto=update never
+     * widens it when the Java enum gains a new constant (e.g. REWORKING, HALTED) — causing
+     * a "Data truncated for column" SQLException the first time a row uses the new value.
+     */
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, columnDefinition = "VARCHAR(30)")
     private TaskStatus status = TaskStatus.YET_TO_START;
 
     @CreationTimestamp

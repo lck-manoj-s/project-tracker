@@ -3,6 +3,16 @@
 <%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
 <%@include file="../layout/header.jsp" %>
 
+<c:if test="${not empty successMessage}">
+    <span id="flashSuccessMsg" data-message="${fn:escapeXml(successMessage)}" hidden></span>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var el = document.getElementById('flashSuccessMsg');
+        if (el) showToast(el.dataset.message, 'success');
+    });
+    </script>
+</c:if>
+
 <style>
   .pipeline-steps { display: inline-flex; align-items: center; gap: 2px; flex-wrap: nowrap; }
   .step { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: .7rem; font-weight: 600;
@@ -23,13 +33,20 @@
 <%-- ── Product tabs ─────────────────────────────────────────────────── --%>
 <ul class="nav nav-tabs mb-3">
     <li class="nav-item">
-        <a class="nav-link ${product.name() == 'PAYROLL' ? 'active' : ''}" href="/mrs/payroll">
+        <a class="nav-link ${activeTab == 'payroll' ? 'active' : ''}" href="/mrs/payroll">
             <span class="badge bg-warning text-dark me-1">Payroll</span> MRs
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link ${product.name() == 'BOOKS' ? 'active' : ''}" href="/mrs/books">
+        <a class="nav-link ${activeTab == 'books' ? 'active' : ''}" href="/mrs/books">
             <span class="badge bg-info text-dark me-1">Books</span> MRs
+        </a>
+    </li>
+    <li class="nav-item">
+        <%-- Scoped to Spend specifically for now (see MrController.OTHER_TAB_PRODUCT) —
+             rename/rework this if it becomes a catch-all again. --%>
+        <a class="nav-link ${activeTab == 'other' ? 'active' : ''}" href="/mrs/other">
+            <span class="badge bg-primary text-white me-1">Spend</span> MRs
         </a>
     </li>
 </ul>
@@ -67,9 +84,18 @@
         <div class="col-auto">
             <label class="filter-label d-block">Merged</label>
             <select name="merged" class="form-select form-select-sm">
-                <option value="false" ${merged == 'false' || empty merged ? 'selected' : ''}>Active Only</option>
-                <option value="all"   ${merged == 'all'   ? 'selected' : ''}>All</option>
+                <option value="false" ${merged == 'false' ? 'selected' : ''}>Active Only</option>
+                <option value="all"   ${merged == 'all' || empty merged ? 'selected' : ''}>All</option>
                 <option value="true"  ${merged == 'true'  ? 'selected' : ''}>Merged Only</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="filter-label d-block">Deployment</label>
+            <select name="deployment" class="form-select form-select-sm">
+                <option value="local"  ${deployment == 'local'  ? 'selected' : ''}>Local</option>
+                <option value="pre"    ${deployment == 'pre'    ? 'selected' : ''}>Pre</option>
+                <option value="idc"    ${deployment == 'idc'    ? 'selected' : ''}>IDC</option>
+                <option value="notIdc" ${deployment == 'notIdc' || empty deployment ? 'selected' : ''}>Not in IDC</option>
             </select>
         </div>
         <div class="col-auto">
@@ -95,14 +121,16 @@
 <div class="card shadow-sm mb-4">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover table-bordered table-sm mb-0">
+            <table class="table table-hover table-bordered table-sm mb-0" id="mrsTable">
                 <thead>
                     <tr>
                         <th>#</th>
+                        <c:if test="${showProductBadge}"><th>Product</th></c:if>
                         <th>MR</th>
                         <th>Name</th>
                         <th>Pipeline</th>
                         <th>Linked</th>
+                        <th>Deployment</th>
                         <c:if test="${canIgnore != 'false'}"><th>Can Ignore</th></c:if>
                         <th>Created</th>
                         <th>Actions</th>
@@ -111,7 +139,7 @@
                 <tbody>
                     <c:choose>
                         <c:when test="${empty mrs}">
-                            <tr><td colspan="${canIgnore != 'false' ? 8 : 7}" class="text-center text-muted py-3">
+                            <tr><td colspan="${8 + (canIgnore != 'false' ? 1 : 0) + (showProductBadge ? 1 : 0)}" class="text-center text-muted py-3">
                                 <i class="bi bi-inbox me-1"></i>No MRs found
                             </td></tr>
                         </c:when>
@@ -119,6 +147,11 @@
                             <c:forEach var="mr" items="${mrs}">
                                 <tr data-mr-id="${mr.mrSerialNumber}">
                                     <td class="text-muted small align-middle">${mr.mrSerialNumber}</td>
+                                    <c:if test="${showProductBadge}">
+                                        <td class="align-middle">
+                                            <span class="badge ${mr.product.badgeClass}">${mr.product.displayName}</span>
+                                        </td>
+                                    </c:if>
                                     <td class="align-middle">
                                         <a href="${mr.mr}" target="_blank" class="badge bg-dark text-decoration-none">
                                             <i class="bi bi-box-arrow-up-right me-1"></i>${mr.mrNumber}
@@ -159,6 +192,27 @@
                                         <span class="badge ${mr.mrLinked.name() == 'LINKED' ? 'bg-success' : mr.mrLinked.name() == 'NOT_LINKED' ? 'bg-danger' : 'bg-secondary'}">
                                             ${mr.mrLinked.displayName}
                                         </span>
+                                    </td>
+                                    <td class="align-middle">
+                                        <c:set var="localTitle" value="Local" />
+                                        <c:if test="${not empty mr.movedToLocalAt}">
+                                            <c:set var="localTitle" value="Local — ${fn:replace(fn:substring(mr.movedToLocalAt.toString(), 0, 16), 'T', ' ')}" />
+                                        </c:if>
+                                        <c:set var="preTitle" value="Pre" />
+                                        <c:if test="${not empty mr.movedToPreAt}">
+                                            <c:set var="preTitle" value="Pre — ${fn:replace(fn:substring(mr.movedToPreAt.toString(), 0, 16), 'T', ' ')}" />
+                                        </c:if>
+                                        <c:set var="idcTitle" value="IDC" />
+                                        <c:if test="${not empty mr.movedToIdcAt}">
+                                            <c:set var="idcTitle" value="IDC — ${fn:replace(fn:substring(mr.movedToIdcAt.toString(), 0, 16), 'T', ' ')}" />
+                                        </c:if>
+                                        <div class="pipeline-steps" title="${mr.deploymentStatus.displayName}">
+                                            <span class="step deploy-step ${mr.deployLocal ? 'step-done' : 'step-todo'}" data-status="LOCAL" title="${localTitle}">Local</span>
+                                            <span class="step-arrow">›</span>
+                                            <span class="step deploy-step ${mr.deployPre   ? 'step-done' : 'step-todo'}" data-status="PRE"   title="${preTitle}">Pre</span>
+                                            <span class="step-arrow">›</span>
+                                            <span class="step deploy-step ${mr.deployIdc   ? 'step-done' : 'step-todo'}" data-status="IDC"   title="${idcTitle}">IDC</span>
+                                        </div>
                                     </td>
                                     <c:if test="${canIgnore != 'false'}">
                                         <td class="align-middle">
@@ -214,7 +268,8 @@
                         <c:if test="${not empty hasParentMr}">    <c:param name="hasParentMr"     value="${hasParentMr}"/></c:if>
                         <c:if test="${not empty parentMrProduct}"><c:param name="parentMrProduct" value="${parentMrProduct}"/></c:if>
                         <c:if test="${not empty mrLinked}">       <c:param name="mrLinked"        value="${mrLinked}"/></c:if>
-                        <c:if test="${merged != 'false'}">         <c:param name="merged"           value="${merged}"/></c:if>
+                        <c:if test="${merged != 'all'}">          <c:param name="merged"           value="${merged}"/></c:if>
+                        <c:if test="${deployment != 'notIdc'}">   <c:param name="deployment"      value="${deployment}"/></c:if>
                         <c:if test="${canIgnore != 'false'}">     <c:param name="canIgnore"       value="${canIgnore}"/></c:if>
                         <c:param name="page" value="${currentPage - 1}"/>
                     </c:url>
@@ -228,7 +283,8 @@
                             <c:if test="${not empty hasParentMr}">    <c:param name="hasParentMr"     value="${hasParentMr}"/></c:if>
                             <c:if test="${not empty parentMrProduct}"><c:param name="parentMrProduct" value="${parentMrProduct}"/></c:if>
                             <c:if test="${not empty mrLinked}">       <c:param name="mrLinked"        value="${mrLinked}"/></c:if>
-                            <c:if test="${merged != 'false'}">         <c:param name="merged"           value="${merged}"/></c:if>
+                            <c:if test="${merged != 'all'}">          <c:param name="merged"           value="${merged}"/></c:if>
+                            <c:if test="${deployment != 'notIdc'}">   <c:param name="deployment"      value="${deployment}"/></c:if>
                             <c:if test="${canIgnore != 'false'}">     <c:param name="canIgnore"       value="${canIgnore}"/></c:if>
                             <c:param name="page" value="${p}"/>
                         </c:url>
@@ -242,7 +298,8 @@
                         <c:if test="${not empty hasParentMr}">    <c:param name="hasParentMr"     value="${hasParentMr}"/></c:if>
                         <c:if test="${not empty parentMrProduct}"><c:param name="parentMrProduct" value="${parentMrProduct}"/></c:if>
                         <c:if test="${not empty mrLinked}">       <c:param name="mrLinked"        value="${mrLinked}"/></c:if>
-                        <c:if test="${merged != 'false'}">         <c:param name="merged"           value="${merged}"/></c:if>
+                        <c:if test="${merged != 'all'}">          <c:param name="merged"           value="${merged}"/></c:if>
+                        <c:if test="${deployment != 'notIdc'}">   <c:param name="deployment"      value="${deployment}"/></c:if>
                         <c:if test="${canIgnore != 'false'}">     <c:param name="canIgnore"       value="${canIgnore}"/></c:if>
                         <c:param name="page" value="${currentPage + 1}"/>
                     </c:url>
@@ -319,8 +376,43 @@ document.querySelectorAll('.pipeline-step').forEach(function (step) {
     });
 });
 
-// Deployment and canIgnore boolean toggles — exclude pipeline-step elements
-document.querySelectorAll('.step:not(.pipeline-step)[data-field]').forEach(function(step) {
+// Deployment stage order — used to redraw an entire row's deployment badges from a single status value
+var DEPLOY_STAGES = ['NONE', 'LOCAL', 'PRE', 'IDC'];
+
+function applyDeploymentStatus(container, status) {
+    var idx = DEPLOY_STAGES.indexOf(status);
+    container.querySelectorAll('.deploy-step').forEach(function (s) {
+        var done = DEPLOY_STAGES.indexOf(s.dataset.status) <= idx;
+        s.classList.toggle('step-done', done);
+        s.classList.toggle('step-todo', !done);
+    });
+    container.title = status;
+}
+
+// Deployment step click — jumps the MR directly to the clicked stage (forward or backward)
+document.querySelectorAll('.deploy-step').forEach(function (step) {
+    step.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var row       = step.closest('tr');
+        var mrId      = row.dataset.mrId;
+        var container = step.closest('.pipeline-steps');
+        var status    = step.dataset.status;
+        var prevStatus = 'NONE';
+        DEPLOY_STAGES.forEach(function (s) {
+            var el = container.querySelector('.deploy-step[data-status="' + s + '"]');
+            if (el && el.classList.contains('step-done')) prevStatus = s;
+        });
+
+        applyDeploymentStatus(container, status); // optimistic
+        fetch('/mrs/' + mrId + '/deployment/' + status, { method: 'POST' })
+            .then(function (r) { if (!r.ok) throw new Error('Update failed'); return r.json(); })
+            .then(function (d) { applyDeploymentStatus(container, d.status); })
+            .catch(function () { applyDeploymentStatus(container, prevStatus); });
+    });
+});
+
+// canIgnore boolean toggle — exclude pipeline-step and deploy-step elements
+document.querySelectorAll('.step:not(.pipeline-step):not(.deploy-step)[data-field]').forEach(function(step) {
     step.addEventListener('click', function(e) {
         e.stopPropagation();
         var field = step.dataset.field;
@@ -354,14 +446,26 @@ var chainPanel     = document.getElementById('mrChainPanel');
 var chainPanelBody = document.getElementById('chainPanelBody');
 var chainPanelHead = document.getElementById('chainPanelHeadRow');
 
+function showChainLoading() {
+    chainPanelHead.innerHTML = '<th style="width:130px;">Field</th>';
+    chainPanelBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-4">'
+        + '<span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>Loading MR chain…</td></tr>';
+    chainPanel.style.display = 'block';
+    chainPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 document.querySelectorAll('.mr-chain-btn').forEach(function (btn) {
     btn.addEventListener('click', function (e) {
         e.stopPropagation();
         var mrId = this.dataset.mrId;
+        showChainLoading();
         fetch('/mrs/' + mrId + '/chain')
             .then(function (r) { return r.json(); })
             .then(function (data) { renderChainPanel(data); })
-            .catch(function () { alert('Could not load MR chain.'); });
+            .catch(function () {
+                chainPanelBody.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-4">Could not load MR chain.</td></tr>';
+                showToast('Could not load MR chain.', 'danger');
+            });
     });
 });
 
@@ -372,10 +476,6 @@ document.addEventListener('click', function (e) {
 });
 
 window.hideChainPanel = function () { chainPanel.style.display = 'none'; };
-
-function chainProductBadgeClass(product) {
-    return product === 'Payroll' ? 'bg-warning text-dark' : 'bg-info text-dark';
-}
 
 function chainNa() { return '<span class="text-muted">—</span>'; }
 
@@ -411,6 +511,23 @@ function chainPipelineCell(mr) {
     return html;
 }
 
+function chainDeploymentCell(mr) {
+    var steps = [
+        { status: 'LOCAL', label: 'Local', val: mr.deployLocal, at: mr.movedToLocalAt },
+        { status: 'PRE',   label: 'Pre',   val: mr.deployPre,   at: mr.movedToPreAt },
+        { status: 'IDC',   label: 'IDC',   val: mr.deployIdc,   at: mr.movedToIdcAt }
+    ];
+    var html = '<div class="pipeline-steps" data-mr-id="' + mr.mrSerialNumber + '">';
+    steps.forEach(function (s, i) {
+        if (i > 0) html += '<span class="step-arrow">›</span>';
+        var title = s.label + (s.at ? ' — ' + s.at : '');
+        html += '<span class="step deploy-step ' + (s.val ? 'step-done' : 'step-todo') + '" '
+              + 'data-status="' + s.status + '" title="' + title + '">' + s.label + '</span>';
+    });
+    html += '</div>';
+    return html;
+}
+
 function chainLinkedBadge(mr) {
     var v = mr.mrLinked || '—';
     var cls = v === 'Linked' ? 'bg-success' : v === 'Not Linked' ? 'bg-danger' : 'bg-secondary';
@@ -427,7 +544,7 @@ function renderChainPanel(data) {
 
     chainPanelHead.innerHTML = '<th style="width:130px;">Field</th>' + chain.map(function (mr, i) {
         var isSelected = i === chain.length - 1;
-        return '<th><span class="badge ' + chainProductBadgeClass(mr.product) + ' me-1">' + mr.product + '</span> MR'
+        return '<th><span class="badge ' + mr.productBadgeClass + ' me-1">' + mr.product + '</span> MR'
              + (isSelected ? ' <span class="badge bg-dark ms-1">Selected</span>' : '') + '</th>';
     }).join('');
 
@@ -439,11 +556,12 @@ function renderChainPanel(data) {
     }
 
     var rows = [
-        { label: 'MR',       fn: chainMrLinkCell },
-        { label: 'Name',     fn: chainNameCell },
-        { label: 'Pipeline', fn: chainPipelineCell },
-        { label: 'Linked',   fn: chainLinkedBadge },
-        { label: 'Created',  fn: chainCreatedCell }
+        { label: 'MR',         fn: chainMrLinkCell },
+        { label: 'Name',       fn: chainNameCell },
+        { label: 'Pipeline',   fn: chainPipelineCell },
+        { label: 'Linked',     fn: chainLinkedBadge },
+        { label: 'Deployment', fn: chainDeploymentCell },
+        { label: 'Created',    fn: chainCreatedCell }
     ];
 
     chainPanelBody.innerHTML = rows.map(function (r) {
@@ -471,6 +589,27 @@ function renderChainPanel(data) {
                 .then(function (r) { if (!r.ok) throw new Error('Update failed'); return r.json(); })
                 .then(function (d) { applyPipelineStatus(container, d.status); })
                 .catch(function () { applyPipelineStatus(container, prevStatus); });
+        });
+    });
+
+    // Wire up deployment stage clicks within the chain panel — same endpoint as the main table
+    chainPanelBody.querySelectorAll('.deploy-step').forEach(function (s) {
+        s.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var container = s.closest('.pipeline-steps');
+            var mrId      = container.dataset.mrId;
+            var status    = s.dataset.status;
+            var prevStatus = 'NONE';
+            DEPLOY_STAGES.forEach(function (st) {
+                var el = container.querySelector('.deploy-step[data-status="' + st + '"]');
+                if (el && el.classList.contains('step-done')) prevStatus = st;
+            });
+
+            applyDeploymentStatus(container, status); // optimistic
+            fetch('/mrs/' + mrId + '/deployment/' + status, { method: 'POST' })
+                .then(function (r) { if (!r.ok) throw new Error('Update failed'); return r.json(); })
+                .then(function (d) { applyDeploymentStatus(container, d.status); })
+                .catch(function () { applyDeploymentStatus(container, prevStatus); });
         });
     });
 

@@ -132,11 +132,19 @@ public class TaskServiceImpl implements TaskService {
         taskRepository.deleteById(id);
     }
 
+    // Statuses eligible to auto-advance to DONE once all of a task's linked MRs are
+    // merged/ignorable. MR_CREATED is the "normal" path; REWORKING and HALTED also
+    // auto-advance so a task doesn't get stuck needing a manual move to Done just
+    // because it was mid-rework or halted when its MRs happened to merge.
+    private static final java.util.Set<TaskStatus> AUTO_TRANSITION_ELIGIBLE =
+            java.util.Set.of(TaskStatus.MR_CREATED, TaskStatus.REWORKING, TaskStatus.HALTED);
+
     @Override
     public void autoTransitionIfMerged(MergeRequest savedMr) {
         Task task = savedMr.getTask();
         if (task == null) return;
-        if (task.getStatus() != TaskStatus.MR_CREATED) return;
+        TaskStatus previousStatus = task.getStatus();
+        if (!AUTO_TRANSITION_ELIGIBLE.contains(previousStatus)) return;
 
         List<MergeRequest> linkedMrs = mergeRequestRepository.findByTask(task);
         if (linkedMrs.isEmpty()) return;
@@ -149,7 +157,7 @@ public class TaskServiceImpl implements TaskService {
             Task savedTask = taskRepository.save(task);
             TaskStatusHistory history = new TaskStatusHistory();
             history.setTask(savedTask);
-            history.setPreviousStatus(TaskStatus.MR_CREATED);
+            history.setPreviousStatus(previousStatus);
             history.setNewStatus(TaskStatus.DONE);
             taskStatusHistoryRepository.save(history);
         }

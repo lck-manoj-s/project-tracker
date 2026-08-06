@@ -5,6 +5,8 @@ public enum TaskStatus {
     IDENTIFYING_ISSUE("Identifying Issue"),
     FIXING("Fixing"),
     MR_CREATED("MR Created"),
+    REWORKING("Reworking"),
+    HALTED("Halted"),
     DONE("Done"),
     PAUSED("Paused");
 

@@ -3,6 +3,16 @@
 <%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
 <%@include file="../layout/header.jsp" %>
 
+<c:if test="${not empty successMessage}">
+    <span id="flashSuccessMsg" data-message="${fn:escapeXml(successMessage)}" hidden></span>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var el = document.getElementById('flashSuccessMsg');
+        if (el) showToast(el.dataset.message, 'success');
+    });
+    </script>
+</c:if>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-list-task me-2"></i>Tasks</h4>
     <a href="/tasks/new" class="btn btn-primary btn-sm">
@@ -22,16 +32,21 @@
             <i class="bi bi-check2-circle me-1"></i>Completed Tasks
         </a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link ${tab == 'parked' ? 'active' : ''}" href="/tasks/parked">
+            <i class="bi bi-pause-circle me-1"></i>Halted &amp; Paused
+        </a>
+    </li>
 </ul>
 
 <%-- ── Filter card (shown for both tabs; status dropdown only on active) --%>
 <div class="filter-card p-3 mb-4">
     <form method="get" action="${baseUrl}" class="row g-2 align-items-end" id="taskFilterForm">
-        <c:if test="${tab == 'active'}">
+        <c:if test="${tab == 'active' || tab == 'parked'}">
             <div class="col-auto">
                 <label class="filter-label d-block">Status</label>
                 <select name="status" class="form-select form-select-sm">
-                    <option value="" ${empty selectedStatus ? 'selected' : ''}>All Active</option>
+                    <option value="" ${empty selectedStatus ? 'selected' : ''}>${tab == 'parked' ? 'All Halted & Paused' : 'All Active'}</option>
                     <c:forEach var="s" items="${taskStatuses}">
                         <option value="${s}" ${s.name() == selectedStatus ? 'selected' : ''}>${s.displayName}</option>
                     </c:forEach>
@@ -87,7 +102,6 @@
                         <th>Description</th>
                         <th>MRs</th>
                         <th>Priority</th>
-                        <%-- <th>Due Date</th> --%>
                         <th>Status</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -116,7 +130,7 @@
                                                 <div class="d-flex flex-wrap gap-1">
                                                     <c:forEach var="mr" items="${task.mergeRequests}">
                                                         <a href="${mr.mr}" target="_blank"
-                                                           class="badge ${mr.product.name() == 'PAYROLL' ? 'bg-warning text-dark' : 'bg-info text-dark'} text-decoration-none"
+                                                           class="badge ${mr.product.badgeClass} text-decoration-none"
                                                            onclick="event.stopPropagation()">
                                                             <i class="bi bi-box-arrow-up-right me-1"></i>${mr.mrNumber}
                                                         </a>
@@ -159,6 +173,12 @@
                                             </c:when>
                                             <c:when test="${task.status.name() == 'MR_CREATED'}">
                                                 <span class="badge bg-primary">${task.status.displayName}</span>
+                                            </c:when>
+                                            <c:when test="${task.status.name() == 'REWORKING'}">
+                                                <span class="badge bg-dark">${task.status.displayName}</span>
+                                            </c:when>
+                                            <c:when test="${task.status.name() == 'HALTED'}">
+                                                <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary">${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'DONE'}">
                                                 <span class="badge bg-success">${task.status.displayName}</span>
@@ -296,13 +316,27 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
     const panelBody = document.getElementById('panelBody');
     const panelHead = document.getElementById('panelHeadRow');
 
+    function showPanelLoading() {
+        document.getElementById('panelTaskId').textContent   = '';
+        document.getElementById('panelTaskDesc').textContent = '';
+        panelHead.innerHTML = '<th style="width:130px;">Field</th>';
+        panelBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-4">'
+            + '<span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>Loading MR status…</td></tr>';
+        panel.style.display = 'block';
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
     document.querySelectorAll('.task-row').forEach(function (row) {
         row.addEventListener('click', function () {
             var taskId = this.dataset.taskId;
+            showPanelLoading();
             fetch('/tasks/' + taskId + '/mrs')
                 .then(function (r) { return r.json(); })
                 .then(function (data) { renderPanel(data); })
-                .catch(function () { alert('Could not load MR details.'); });
+                .catch(function () {
+                    panelBody.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-4">Could not load MR details.</td></tr>';
+                    showToast('Could not load MR details.', 'danger');
+                });
         });
     });
 
@@ -314,10 +348,6 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
 
     window.hidePanel = function () { panel.style.display = 'none'; };
 
-    function productBadgeClass(product) {
-        return product === 'Payroll' ? 'bg-warning text-dark' : 'bg-info text-dark';
-    }
-
     function renderPanel(data) {
         document.getElementById('panelTaskId').textContent   = data.taskId;
         document.getElementById('panelTaskDesc').textContent = data.description;
@@ -326,7 +356,7 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
 
         // Header: one column per linked MR (product-colored)
         panelHead.innerHTML = '<th style="width:130px;">Field</th>' + mrs.map(function (mr) {
-            return '<th><span class="badge ' + productBadgeClass(mr.product) + ' me-1">' + mr.product + '</span> MR</th>';
+            return '<th><span class="badge ' + mr.productBadgeClass + ' me-1">' + mr.product + '</span> MR</th>';
         }).join('');
 
         if (!mrs.length) {
@@ -341,6 +371,7 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
             { label: 'Name',       fn: nameCell },
             { label: 'Pipeline',   fn: pipeline },
             { label: 'Linked',     fn: linkedBadge },
+            { label: 'Deployment', fn: deploymentCell },
             { label: 'Created',    fn: createdCell }
         ];
 
@@ -372,6 +403,27 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
             });
         });
 
+        // Wire up deployment stage clicks — same endpoint as the main MR table
+        panelBody.querySelectorAll('.deploy-step').forEach(function (s) {
+            s.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var container  = s.closest('.panel-steps');
+                var mrId       = container.dataset.mrId;
+                var status     = s.dataset.status;
+                var prevStatus = 'NONE';
+                DEPLOY_STAGES.forEach(function (st) {
+                    var el = container.querySelector('.deploy-step[data-status="' + st + '"]');
+                    if (el && el.classList.contains('ps-done')) prevStatus = st;
+                });
+
+                applyDeploymentStatus(container, status); // optimistic
+                fetch('/mrs/' + mrId + '/deployment/' + status, { method: 'POST' })
+                    .then(function (r) { if (!r.ok) throw new Error('Update failed'); return r.json(); })
+                    .then(function (d) { applyDeploymentStatus(container, d.status); })
+                    .catch(function ()  { applyDeploymentStatus(container, prevStatus); });
+            });
+        });
+
         panel.style.display = 'block';
         panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -388,6 +440,16 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
         var idx = PIPELINE_STAGES.indexOf(status);
         container.querySelectorAll('.pipeline-step').forEach(function (s) {
             applyStep(s, PIPELINE_STAGES.indexOf(s.dataset.status) <= idx);
+        });
+    }
+
+    // Deployment stage order — used to redraw an MR's deployment badges from a single status value
+    var DEPLOY_STAGES = ['NONE', 'LOCAL', 'PRE', 'IDC'];
+
+    function applyDeploymentStatus(container, status) {
+        var idx = DEPLOY_STAGES.indexOf(status);
+        container.querySelectorAll('.deploy-step').forEach(function (s) {
+            applyStep(s, DEPLOY_STAGES.indexOf(s.dataset.status) <= idx);
         });
     }
 
@@ -423,6 +485,25 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
             if (i > 0) html += arrow();
             html += '<span class="ps pipeline-step ' + (s.val ? 'ps-done' : 'ps-todo') + '" '
                   + 'data-status="' + s.status + '" style="cursor:pointer;" title="' + s.title + '">'
+                  + s.label + '</span>';
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function deploymentCell(mr) {
+        if (!mr) return null;
+        var steps = [
+            { status: 'LOCAL', label: 'Local', val: mr.deployLocal, at: mr.movedToLocalAt },
+            { status: 'PRE',   label: 'Pre',   val: mr.deployPre,   at: mr.movedToPreAt },
+            { status: 'IDC',   label: 'IDC',   val: mr.deployIdc,   at: mr.movedToIdcAt }
+        ];
+        var html = '<div class="panel-steps" data-mr-id="' + mr.mrSerialNumber + '">';
+        steps.forEach(function (s, i) {
+            if (i > 0) html += arrow();
+            var title = s.label + (s.at ? ' — ' + s.at : '');
+            html += '<span class="ps deploy-step ' + (s.val ? 'ps-done' : 'ps-todo') + '" '
+                  + 'data-status="' + s.status + '" style="cursor:pointer;" title="' + title + '">'
                   + s.label + '</span>';
         });
         html += '</div>';

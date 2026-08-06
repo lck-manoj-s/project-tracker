@@ -10,6 +10,7 @@ A small Spring Boot web app for tracking engineering tasks and the merge request
 - **Parent MR chains** — an MR can optionally link to a parent MR (e.g. a backport or follow-up). Clicking the chain icon next to an MR opens a panel showing the full ancestor chain with per-MR pipeline controls, mirroring the per-task MR panel.
 - **Dashboard** (`/dashboard`) — task/MR status breakdowns, pipeline completion charts, average time per stage, stale tasks/MRs, recent activity feeds, and "needs attention" lists (waiting for review, ready for GTM/RTM, not yet merged).
 - **History** (`/history`) — a filterable, paginated audit log of every task and MR status transition.
+- **Time Sheet** (`/timesheet`) — log activities with a start/end time, optionally linked to a Task. Shown as a day-grouped timeline (paginated by day) with per-day and today/this-week totals, filterable by date range and task.
 
 ## Tech stack
 
@@ -23,8 +24,8 @@ A small Spring Boot web app for tracking engineering tasks and the merge request
 
 ```
 src/main/java/com/manoj/tasksmr/
-  controller/    Spring MVC controllers (Task, Mr, Dashboard, History, Home, error)
-  model/         JPA entities: Task, MergeRequest, TaskStatusHistory, MrStatusHistory
+  controller/    Spring MVC controllers (Task, Mr, Dashboard, History, TimeSheet, Home, error)
+  model/         JPA entities: Task, MergeRequest, TaskStatusHistory, MrStatusHistory, TimeSheetEntry
   repository/    Spring Data repositories
   service/       Business logic (TaskService, MrService + impls)
   specification/ JPA Specifications for dynamic filtering
@@ -34,7 +35,7 @@ src/main/resources/
   application.properties        shared config (JPA, JSP, logging) + default active profile
   application-local.properties  local dev datasource
   application-live.properties   live (Tomcat-deployed) datasource
-src/main/webapp/WEB-INF/views/  JSP views (tasks/, mr/, history/, dashboard.jsp, layout/)
+src/main/webapp/WEB-INF/views/  JSP views (tasks/, mr/, history/, timesheet/, dashboard.jsp, layout/)
 deploy.sh                       builds the WAR and hot-deploys it to a local Homebrew Tomcat
 ```
 
