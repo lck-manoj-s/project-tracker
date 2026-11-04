@@ -1,0 +1,49 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Tasks list (tasks/list.jsp) — Task-only rules.
+   Shared pills, tabs, filter bar, footer, panel header, and pipeline steps
+   live in /css/lists.css.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Priority left edge bar ─────────────────────────────────────────────
+   Applied to the first cell of each row. Colors match the priority pills. */
+.task-row.prio-high > td:first-child   { box-shadow: inset 4px 0 0 #D85A30, 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06); }
+.task-row.prio-medium > td:first-child { box-shadow: inset 4px 0 0 #BA7517, 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06); }
+.task-row.prio-low > td:first-child    { box-shadow: inset 4px 0 0 #888780, 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06); }
+
+/* ── MR status panel (Tasks page only) ───────────────────────────────────
+   Priority is shown as a neutral label pill in the header. The rest of the
+   block uses the shared blue panel header and step styles from lists.css. */
+#mrPanel .panel-prio {
+    background: #ffffff;
+    color: #0d6efd;
+    border: 0;
+}
+
+/* Step pills in the status panel share the shared shape */
+#mrPanel .ps {
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: .72rem;
+    display: inline-block;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+#mrPanel .ps-arrow {
+    color: var(--app-text-muted);
+    font-size: .65rem;
+}
+
+/* Same blue completed / white not-done look as the shared steps on the MR page */
+#mrPanel .ps-done {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #ffffff;
+}
+
+#mrPanel .ps-todo {
+    background: #ffffff;
+    border: 1px solid #B4B2A9;
+    color: #5F5E5A;
+}

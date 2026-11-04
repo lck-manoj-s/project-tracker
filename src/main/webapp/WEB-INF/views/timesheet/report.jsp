@@ -5,18 +5,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-<style>
-  .day-toggle {
-      cursor: pointer;
-      background: #f8f9fa;
-      color: #212529;
-      border-bottom: 1px solid #e9ecef;
-      border-radius: .375rem .375rem 0 0;
-  }
-  .ts-row-open { background: rgba(255,193,7,.06); }
-  .ts-row:hover { background: #f8f9fa; }
-  .week-nav-btn { min-width: 80px; }
-</style>
+<link rel="stylesheet" href="/css/lists.css">
+<link rel="stylesheet" href="/css/timesheet.css">
 
 <%-- ── Page header ────────────────────────────────────────────────────── --%>
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -28,26 +18,24 @@
 
 <%-- ── Week navigation ─────────────────────────────────────────────────── --%>
 <div class="d-flex align-items-center justify-content-center gap-2 mb-4 flex-wrap">
-    <a href="/timesheet/report?weekOffset=${prevOffset}" class="btn btn-outline-secondary btn-sm week-nav-btn">
-        <i class="bi bi-chevron-left"></i> Prev
+    <a href="/timesheet/report?weekOffset=${prevOffset}" class="btn-pager">
+        <i class="bi bi-chevron-left"></i>Prev
     </a>
     <span class="fw-semibold px-3 text-center" style="min-width:260px;">
         <i class="bi bi-calendar-week me-1 text-primary"></i>${weekRangeLabel}
     </span>
     <c:choose>
         <c:when test="${isCurrentWeek}">
-            <button class="btn btn-outline-secondary btn-sm week-nav-btn" disabled>
-                Next <i class="bi bi-chevron-right"></i>
-            </button>
+            <span class="btn-pager is-disabled">Next<i class="bi bi-chevron-right"></i></span>
         </c:when>
         <c:otherwise>
-            <a href="/timesheet/report?weekOffset=${nextOffset}" class="btn btn-outline-secondary btn-sm week-nav-btn">
-                Next <i class="bi bi-chevron-right"></i>
+            <a href="/timesheet/report?weekOffset=${nextOffset}" class="btn-pager">
+                Next<i class="bi bi-chevron-right"></i>
             </a>
         </c:otherwise>
     </c:choose>
     <c:if test="${!isCurrentWeek}">
-        <a href="/timesheet/report?weekOffset=0" class="btn btn-sm btn-outline-primary ms-2">
+        <a href="/timesheet/report?weekOffset=0" class="btn-pager ms-2">
             Current Week
         </a>
     </c:if>
@@ -113,7 +101,15 @@
                                 ${fn:substring(t.description, 0, 80)}${fn:length(t.description) > 80 ? '…' : ''}
                             </td>
                             <td>
-                                <span class="badge bg-secondary rounded-pill" style="font-size:.65rem;">${t.status}</span>
+                                <c:choose>
+                                    <c:when test="${t.statusName == 'YET_TO_START'}"><span class="pill pill-red"><i class="bi bi-circle"></i>${t.status}</span></c:when>
+                                    <c:when test="${t.statusName == 'IDENTIFYING_ISSUE'}"><span class="pill pill-amber"><i class="bi bi-search"></i>${t.status}</span></c:when>
+                                    <c:when test="${t.statusName == 'FIXING'}"><span class="pill pill-teal"><i class="bi bi-wrench"></i>${t.status}</span></c:when>
+                                    <c:when test="${t.statusName == 'MR_CREATED'}"><span class="pill pill-blue"><i class="bi bi-git"></i>${t.status}</span></c:when>
+                                    <c:when test="${t.statusName == 'REWORKING'}"><span class="pill pill-purple"><i class="bi bi-arrow-repeat"></i>${t.status}</span></c:when>
+                                    <c:when test="${t.statusName == 'DONE'}"><span class="pill pill-green"><i class="bi bi-check-circle"></i>${t.status}</span></c:when>
+                                    <c:otherwise><span class="pill pill-gray"><i class="bi bi-pause-circle"></i>${t.status}</span></c:otherwise>
+                                </c:choose>
                             </td>
                             <td class="text-end pe-3 fw-semibold small text-primary">${t.hoursLabel}</td>
                         </tr>
@@ -133,7 +129,7 @@
 </c:choose>
 
 <%-- ── Detailed day log ─────────────────────────────────────────────────── --%>
-<h6 class="fw-semibold text-muted mb-2"><i class="bi bi-list-ul me-1"></i>Detailed Log</h6>
+<div class="section-label mb-2"><i class="bi bi-list-ul me-1"></i>Detailed Log</div>
 
 <c:choose>
     <c:when test="${empty dayGroups}">
@@ -158,17 +154,17 @@
                     <span class="d-flex align-items-center gap-2 fw-bold">
                         <i class="bi bi-calendar3 text-primary"></i>${group.dateLabel}
                         <c:if test="${group.isToday}">
-                            <span class="badge bg-primary rounded-pill">Today</span>
+                            <span class="pill pill-blue">Today</span>
                         </c:if>
                         <c:if test="${group.hasOpenEntry}">
-                            <span class="badge bg-warning text-dark rounded-pill">
-                                <i class="bi bi-exclamation-triangle me-1"></i>Missing end time
+                            <span class="pill pill-amber">
+                                <i class="bi bi-exclamation-triangle"></i>Missing end time
                             </span>
                         </c:if>
                     </span>
                     <span class="d-flex align-items-center gap-2">
-                        <span class="badge bg-secondary rounded-pill" style="font-size:.8rem;">${fn:length(group.entries)} Logs</span>
-                        <span class="badge bg-dark rounded-pill" style="font-size:.8rem;">${group.totalLabel}</span>
+                        <span class="pill pill-gray">${fn:length(group.entries)} Logs</span>
+                        <span class="pill pill-blue">${group.totalLabel}</span>
                         <i class="bi bi-chevron-down text-muted" style="font-size:.8rem;"></i>
                     </span>
                 </div>
@@ -225,13 +221,14 @@
     var today = new Date();
     var todayIdx = today.getDay() === 0 ? 6 : today.getDay() - 1; // Mon=0 … Sun=6
 
+    // Today = brand blue (#0d6efd); other days = soft indigo, same family as the app's accents
     var colors = data.map(function (_, i) {
         return i === todayIdx
-            ? 'rgba(16,185,129,0.85)'   // green for today
-            : 'rgba(79,70,229,0.72)';   // indigo for other days
+            ? 'rgba(13,110,253,0.9)'    // brand blue for today
+            : 'rgba(79,70,229,0.55)';   // soft indigo for other days
     });
     var borders = data.map(function (_, i) {
-        return i === todayIdx ? 'rgba(16,185,129,1)' : 'rgba(79,70,229,1)';
+        return i === todayIdx ? 'rgba(13,110,253,1)' : 'rgba(79,70,229,1)';
     });
 
     new Chart(ctx, {

@@ -7,6 +7,7 @@
 <%-- Form-page CSS lives in /css/forms.css (not inline) — see that file's
      "Task form" section for these rules. --%>
 <link rel="stylesheet" href="/css/forms.css">
+<link rel="stylesheet" href="/css/lists.css">
 
 <div class="task-form-container">
 
@@ -243,6 +244,9 @@ var selectedIds = [
     var chips = document.getElementById('mrChips');
     var idsContainer = document.getElementById('mrIdsContainer');
 
+    // Same product palette as the Tasks and MR list pages
+    var MR_PRODUCT_PILL = { Payroll: 'pill-green', Books: 'pill-purple', Spend: 'pill-pink' };
+
     var byId = {};
     availableMrs.forEach(function (mr) { byId[mr.id] = mr; });
 
@@ -260,7 +264,7 @@ var selectedIds = [
             idsContainer.appendChild(hidden);
 
             var chip = document.createElement('span');
-            chip.className = 'badge ' + mr.badgeClass + ' d-inline-flex align-items-center gap-1 py-2 px-2';
+            chip.className = 'pill ' + (MR_PRODUCT_PILL[mr.product] || 'pill-gray') + ' gap-1 py-1 px-2';
             chip.innerHTML = '<span>' + mr.number + (mr.name ? ' — ' + mr.name : '') + '</span>'
                 + '<i class="bi bi-x-circle-fill ms-1" style="cursor:pointer;" title="Remove"></i>';
             chip.querySelector('i').addEventListener('click', function () {

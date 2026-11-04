@@ -25,9 +25,9 @@
             --bs-border-radius:      .625rem;
             --bs-border-radius-sm:   .4rem;
             --bs-border-radius-lg:   .875rem;
-            --bs-border-color:       #e5e7eb;
+            --bs-border-color:       #dde1ee;
             --app-surface:           #ffffff;
-            --app-bg:                #f5f6fa;
+            --app-bg:                #eef0f8;
             --app-text:              #1e2333;
             --app-text-muted:        #57606f;
             --app-thead-bg:          #f8fafc;
@@ -97,6 +97,7 @@
             align-items: center;
             gap: .6rem;
             padding: .3rem .4rem;
+            margin-bottom: .9rem;
             white-space: nowrap;
             flex-shrink: 0;
         }
@@ -180,6 +181,10 @@
         .action-btn.action-time .action-icon { background: #1D9E75; }
 
         #searchTrigger .side-label { color: var(--app-text-muted); }
+        .action-search .action-icon { background: #5F5E5A; }
+        /* Utilities group (search + quick-create): breathing room between each item
+           so the collapsed rail doesn't read as one crowded stack. */
+        .nav-group.utilities { gap: .75rem; }
 
         .week-widget {
             flex-shrink: 0;
@@ -203,6 +208,7 @@
         .sidebar-toggle i { font-size: 1.1rem; flex-shrink: 0; width: 1.1rem; text-align: center; }
 
         .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .page-main { padding-top: 2.5rem; }
 
         /* ── Cards ───────────────────────────────────────────────────────── */
         .card { border: none; box-shadow: var(--app-shadow-sm); }
@@ -404,7 +410,7 @@
 
             <span class="group-label">Work</span>
             <a class="side-link nav-tasks ${pageContext.request.servletPath.startsWith('/tasks') ? 'active' : ''}" href="/tasks" title="Tasks (Ctrl+2)">
-                <span class="action-icon"><i class="bi bi-check2-square"></i></span>
+                <span class="action-icon"><i class="bi bi-check-square-fill"></i></span>
                 <span class="side-label">Tasks</span>
                 <span class="side-shortcut">2</span>
             </a>
@@ -437,10 +443,10 @@
         <div class="side-spacer"></div>
         <hr class="side-divider">
 
-        <div class="nav-group">
+        <div class="nav-group utilities">
             <span class="group-label">Utilities</span>
-            <button type="button" id="searchTrigger" class="side-link">
-                <i class="bi bi-search"></i>
+            <button type="button" id="searchTrigger" class="side-link action-search">
+                <span class="action-icon"><i class="bi bi-search"></i></span>
                 <span class="side-label">Search...</span>
                 <kbd>Ctrl K</kbd>
             </button>
@@ -656,7 +662,6 @@
     });
 })();
 </script>
-<%-- pt-4 (1.5rem) replaces the breathing room the old top navbar's mb-4 used to give
-     page content before the sidebar existed — every page gets it from here, no
-     per-page changes needed. --%>
-<div class="container-fluid px-4 pt-4 pb-5">
+<%-- .page-main (2.5rem top) gives page content room below the browser edge — every page
+     gets it from here, no per-page changes needed. --%>
+<div class="container-fluid px-4 pb-5 page-main">

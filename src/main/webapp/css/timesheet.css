@@ -1,0 +1,21 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Timesheet pages (timesheet/list.jsp and timesheet/report.jsp)
+   Day group headers and log rows. Shared pills, pager buttons, and section
+   labels live in /css/lists.css.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.day-toggle {
+    cursor: pointer;
+    background: var(--app-bg);
+    color: var(--app-text);
+    border-bottom: 0.5px solid var(--bs-border-color);
+    border-radius: .375rem .375rem 0 0;
+}
+
+.ts-row-open {
+    background: rgba(255,193,7,.06);
+}
+
+.ts-row:hover {
+    background: #f8f9fa;
+}

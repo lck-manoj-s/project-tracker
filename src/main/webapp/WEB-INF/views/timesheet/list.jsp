@@ -13,18 +13,8 @@
     </script>
 </c:if>
 
-<style>
-  .day-toggle {
-      cursor: pointer;
-      background: #f8f9fa;
-      color: #212529;
-      border-bottom: 1px solid #e9ecef;
-      border-radius: .375rem .375rem 0 0;
-  }
-
-  .ts-row-open { background: rgba(255,193,7,.06); }
-  .ts-row:hover { background: #f8f9fa; }
-</style>
+<link rel="stylesheet" href="/css/lists.css">
+<link rel="stylesheet" href="/css/timesheet.css">
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-stopwatch me-2"></i>Time Sheet</h4>
@@ -50,9 +40,9 @@
 </div>
 
 <%-- ── This week ────────────────────────────────────────────────────── --%>
-<div class="filter-card p-3 mb-3">
+<div class="filter-card list-filter p-3 mb-3">
     <form method="get" action="/timesheet" class="row g-2 align-items-end">
-        <div class="col-auto">
+        <div class="col-auto align-self-center">
             <span class="fw-semibold"><i class="bi bi-calendar-week me-1 text-primary"></i>Week of ${weekRangeLabel}</span>
         </div>
         <div class="col-auto ms-auto">
@@ -99,16 +89,16 @@
                      aria-expanded="${group.isToday ? 'true' : 'false'}" aria-controls="dayBody${gs.index}">
                     <span class="d-flex align-items-center gap-2 fw-bold">
                         <i class="bi bi-calendar3 text-primary"></i>${group.dateLabel}
-                        <c:if test="${group.isToday}"><span class="badge bg-primary rounded-pill">Today</span></c:if>
+                        <c:if test="${group.isToday}"><span class="pill pill-blue">Today</span></c:if>
                         <c:if test="${group.hasOpenEntry}">
-                            <span class="badge bg-warning text-dark rounded-pill">
-                                <i class="bi bi-exclamation-triangle me-1"></i>Missing end time
+                            <span class="pill pill-amber">
+                                <i class="bi bi-exclamation-triangle"></i>Missing end time
                             </span>
                         </c:if>
                     </span>
                     <span class="d-flex align-items-center gap-2">
-                        <span class="badge bg-secondary rounded-pill" style="font-size:.8rem;">${fn:length(group.entries)} Logs</span>
-                        <span class="badge bg-dark rounded-pill" style="font-size:.8rem;">${group.totalLabel}</span>
+                        <span class="pill pill-gray">${fn:length(group.entries)} Logs</span>
+                        <span class="pill pill-blue">${group.totalLabel}</span>
                     </span>
                 </div>
                 <div class="collapse ${group.isToday ? 'show' : ''}" id="dayBody${gs.index}">
@@ -151,11 +141,10 @@
 </c:choose>
 
 <%-- ── Export to CSV ───────────────────────────────────────────────── --%>
-<div class="card shadow-sm mb-4">
-    <div class="card-header py-2">
-        <span class="fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1 text-success"></i>Export to CSV</span>
-    </div>
+<%-- mt-4 gives the same gap below the day list and below the empty-state card --%>
+<div class="card shadow-sm mt-4 mb-4">
     <div class="card-body">
+        <div class="section-label"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Export to CSV</div>
         <form method="get" action="/timesheet/export" class="row g-2 align-items-end">
             <div class="col-auto">
                 <label class="filter-label d-block">From</label>
@@ -179,7 +168,7 @@
                 </div>
             </div>
             <div class="col-auto">
-                <button type="submit" class="btn btn-sm btn-success">
+                <button type="submit" class="btn btn-sm btn-primary add-btn">
                     <i class="bi bi-download me-1"></i>Export CSV
                 </button>
             </div>

@@ -211,6 +211,7 @@ public class TimeSheetController {
                 m.put("taskId",      id);
                 m.put("description", e.getTask().getDescription());
                 m.put("status",      e.getTask().getStatus().getDisplayName());
+                m.put("statusName",  e.getTask().getStatus().name());
                 m.put("minutes",     0L);
                 return m;
             });

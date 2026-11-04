@@ -18,12 +18,16 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 @Controller
@@ -136,6 +140,15 @@ public class MrController {
         model.addAttribute("currentPage",   mrPage.getNumber());
         model.addAttribute("totalPages",    mrPage.getTotalPages());
         model.addAttribute("totalElements", mrPage.getTotalElements());
+
+        // MR serial numbers that have at least one child MR — drives the "view children" button
+        // on parent rows. Computed from all MRs (not just this page) so it stays correct.
+        Set<Long> parentIdsWithChildren = mrService.getAllMrs().stream()
+                .map(MergeRequest::getParentMr)
+                .filter(Objects::nonNull)
+                .map(MergeRequest::getMrSerialNumber)
+                .collect(Collectors.toSet());
+        model.addAttribute("parentIdsWithChildren", parentIdsWithChildren);
 
         model.addAttribute("activeTab",       activeTab);
         // A tab with no single exact product (i.e. "Other") can mix products in one table,
@@ -343,7 +356,33 @@ public class MrController {
 
         Map<String, Object> response = new HashMap<>();
         response.put("mrSerialNumber", mr.getMrSerialNumber());
+        response.put("selectedId", mr.getMrSerialNumber());
         response.put("chain", chain);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * JSON endpoint for the parent's "children" panel — the mirror of {@link #getMrChain}.
+     * Returns the given MR first (the selected column), followed by every MR whose parentMr
+     * is this MR, ordered by serial number.
+     */
+    @GetMapping("/{id}/children")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getMrChildren(@PathVariable Long id) {
+        MergeRequest parent = mrService.getMrById(id)
+                .orElseThrow(() -> new IllegalArgumentException("MR not found: " + id));
+
+        List<Map<String, Object>> columns = new ArrayList<>();
+        columns.add(mrToMap(parent));
+        mrService.getAllMrs().stream()
+                .filter(m -> m.getParentMr() != null && Objects.equals(m.getParentMr().getMrSerialNumber(), id))
+                .sorted(Comparator.comparing(MergeRequest::getMrSerialNumber))
+                .forEach(m -> columns.add(mrToMap(m)));
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("mrSerialNumber", parent.getMrSerialNumber());
+        response.put("selectedId", parent.getMrSerialNumber());
+        response.put("chain", columns);
         return ResponseEntity.ok(response);
     }
 

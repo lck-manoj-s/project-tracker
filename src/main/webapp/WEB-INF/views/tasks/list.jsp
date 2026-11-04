@@ -2,6 +2,8 @@
 <%@ taglib prefix="c"  uri="jakarta.tags.core" %>
 <%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
 <%@include file="../layout/header.jsp" %>
+<link rel="stylesheet" href="/css/lists.css">
+<link rel="stylesheet" href="/css/task-list.css">
 
 <c:if test="${not empty successMessage}">
     <span id="flashSuccessMsg" data-message="${fn:escapeXml(successMessage)}" hidden></span>
@@ -13,34 +15,28 @@
     </script>
 </c:if>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0"><i class="bi bi-list-task me-2"></i>Tasks</h4>
-    <a href="/tasks/new" class="btn btn-primary btn-sm">
+<h4 class="mb-3"><i class="bi bi-list-task me-2"></i>Tasks</h4>
+
+<%-- ── Tabs + Add Task (Add Task sits on the right of the tabs row) ───────── --%>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+<div class="segmented" role="tablist">
+    <a class="segmented-item ${tab == 'active' ? 'active' : ''}" href="/tasks" role="tab" aria-selected="${tab == 'active'}">
+        <i class="bi bi-play-circle"></i>Active Tasks
+    </a>
+    <a class="segmented-item ${tab == 'completed' ? 'active' : ''}" href="/tasks/completed" role="tab" aria-selected="${tab == 'completed'}">
+        <i class="bi bi-check2-circle"></i>Completed Tasks
+    </a>
+    <a class="segmented-item ${tab == 'parked' ? 'active' : ''}" href="/tasks/parked" role="tab" aria-selected="${tab == 'parked'}">
+        <i class="bi bi-pause-circle"></i>Halted &amp; Paused
+    </a>
+</div>
+    <a href="/tasks/new" class="btn btn-primary btn-sm add-btn">
         <i class="bi bi-plus-lg me-1"></i>Add Task
     </a>
 </div>
 
-<%-- ── Tabs ──────────────────────────────────────────────────────────── --%>
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <a class="nav-link ${tab == 'active' ? 'active' : ''}" href="/tasks">
-            <i class="bi bi-play-circle me-1"></i>Active Tasks
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link ${tab == 'completed' ? 'active' : ''}" href="/tasks/completed">
-            <i class="bi bi-check2-circle me-1"></i>Completed Tasks
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link ${tab == 'parked' ? 'active' : ''}" href="/tasks/parked">
-            <i class="bi bi-pause-circle me-1"></i>Halted &amp; Paused
-        </a>
-    </li>
-</ul>
-
 <%-- ── Filter card (shown for both tabs; status dropdown only on active) --%>
-<div class="filter-card p-3 mb-4">
+<div class="filter-card list-filter p-3 mb-4">
     <form method="get" action="${baseUrl}" class="row g-2 align-items-end" id="taskFilterForm">
         <c:if test="${tab == 'active' || tab == 'parked'}">
             <div class="col-auto">
@@ -118,7 +114,7 @@
                         </c:when>
                         <c:otherwise>
                             <c:forEach var="task" items="${tasks}">
-                                <tr class="task-row" data-task-id="${task.taskId}" style="cursor:pointer;" title="Click to view MR status">
+                                <tr class="task-row prio-${fn:toLowerCase(task.priority.name())}" data-task-id="${task.taskId}" data-priority="${task.priority.name()}" style="cursor:pointer;" title="Click to view MR status">
                                     <td class="text-muted small">${task.taskId}</td>
                                     <td>${task.description}</td>
                                     <td>
@@ -129,11 +125,15 @@
                                             <c:otherwise>
                                                 <div class="d-flex flex-wrap gap-1">
                                                     <c:forEach var="mr" items="${task.mergeRequests}">
+                                                        <c:choose>
+                                                            <c:when test="${mr.product.name() == 'PAYROLL'}"><c:set var="mrPill" value="pill-green"/></c:when>
+                                                            <c:when test="${mr.product.name() == 'BOOKS'}"><c:set var="mrPill" value="pill-purple"/></c:when>
+                                                            <c:when test="${mr.product.name() == 'SPEND'}"><c:set var="mrPill" value="pill-pink"/></c:when>
+                                                            <c:otherwise><c:set var="mrPill" value="pill-gray"/></c:otherwise>
+                                                        </c:choose>
                                                         <a href="${mr.mr}" target="_blank"
-                                                           class="badge ${mr.product.badgeClass} text-decoration-none"
-                                                           onclick="event.stopPropagation()">
-                                                            <i class="bi bi-box-arrow-up-right me-1"></i>${mr.mrNumber}
-                                                        </a>
+                                                           class="pill ${mrPill} text-decoration-none"
+                                                           onclick="event.stopPropagation()">${mr.mrNumber}</a>
                                                     </c:forEach>
                                                 </div>
                                             </c:otherwise>
@@ -142,13 +142,13 @@
                                     <td>
                                         <c:choose>
                                             <c:when test="${task.priority.name() == 'HIGH'}">
-                                                <span class="badge bg-danger">${task.priority.displayName}</span>
+                                                <span class="pill pill-coral">${task.priority.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.priority.name() == 'MEDIUM'}">
-                                                <span class="badge bg-warning text-dark">${task.priority.displayName}</span>
+                                                <span class="pill pill-amber">${task.priority.displayName}</span>
                                             </c:when>
                                             <c:otherwise>
-                                                <span class="badge bg-secondary">${task.priority.displayName}</span>
+                                                <span class="pill pill-gray">${task.priority.displayName}</span>
                                             </c:otherwise>
                                         </c:choose>
                                     </td>
@@ -163,31 +163,31 @@
                                     <td>
                                         <c:choose>
                                             <c:when test="${task.status.name() == 'YET_TO_START'}">
-                                                <span class="badge bg-danger">${task.status.displayName}</span>
+                                                <span class="pill pill-red"><i class="bi bi-circle"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'IDENTIFYING_ISSUE'}">
-                                                <span class="badge bg-warning text-dark">${task.status.displayName}</span>
+                                                <span class="pill pill-amber"><i class="bi bi-search"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'FIXING'}">
-                                                <span class="badge bg-info text-dark">${task.status.displayName}</span>
+                                                <span class="pill pill-teal"><i class="bi bi-wrench"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'MR_CREATED'}">
-                                                <span class="badge bg-primary">${task.status.displayName}</span>
+                                                <span class="pill pill-blue"><i class="bi bi-git"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'REWORKING'}">
-                                                <span class="badge bg-dark">${task.status.displayName}</span>
+                                                <span class="pill pill-purple"><i class="bi bi-arrow-repeat"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'HALTED'}">
-                                                <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary">${task.status.displayName}</span>
+                                                <span class="pill pill-gray"><i class="bi bi-pause-circle"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'DONE'}">
-                                                <span class="badge bg-success">${task.status.displayName}</span>
+                                                <span class="pill pill-green"><i class="bi bi-check-circle"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:when test="${task.status.name() == 'PAUSED'}">
-                                                <span class="badge bg-secondary">${task.status.displayName}</span>
+                                                <span class="pill pill-gray"><i class="bi bi-pause-circle"></i>${task.status.displayName}</span>
                                             </c:when>
                                             <c:otherwise>
-                                                <span class="badge bg-secondary">${task.status.displayName}</span>
+                                                <span class="pill pill-gray"><i class="bi bi-circle"></i>${task.status.displayName}</span>
                                             </c:otherwise>
                                         </c:choose>
                                     </td>
@@ -219,16 +219,18 @@
             </table>
         </div>
     </div>
-    <div class="card-footer d-flex justify-content-between align-items-center">
+    <div class="card-footer list-footer d-flex justify-content-between align-items-center">
         <span class="text-muted small">
             Showing ${tasks.size()} of ${totalElements} task(s)
             &nbsp;|&nbsp; Page ${currentPage + 1} of ${totalPages == 0 ? 1 : totalPages}
         </span>
         <c:if test="${totalPages > 1}">
-            <nav>
-                <ul class="pagination pagination-sm mb-0">
-                    <%-- Previous --%>
-                    <li class="page-item ${currentPage == 0 ? 'disabled' : ''}">
+            <div class="d-flex gap-2">
+                <c:choose>
+                    <c:when test="${currentPage == 0}">
+                        <span class="btn-pager is-disabled"><i class="bi bi-chevron-left"></i>Previous</span>
+                    </c:when>
+                    <c:otherwise>
                         <c:url var="prevUrl" value="${baseUrl}">
                             <c:if test="${not empty selectedStatus}">       <c:param name="status"         value="${selectedStatus}"/></c:if>
                             <c:if test="${not empty selectedPriority}">     <c:param name="priority"       value="${selectedPriority}"/></c:if>
@@ -236,25 +238,15 @@
                             <c:if test="${not empty selectedAllDiCompleted}"><c:param name="allDiCompleted" value="${selectedAllDiCompleted}"/></c:if>
                             <c:param name="page" value="${currentPage - 1}"/>
                         </c:url>
-                        <a class="page-link" href="${prevUrl}"><i class="bi bi-chevron-left"></i></a>
-                    </li>
+                        <a class="btn-pager" href="${prevUrl}"><i class="bi bi-chevron-left"></i>Previous</a>
+                    </c:otherwise>
+                </c:choose>
 
-                    <%-- Page numbers --%>
-                    <c:forEach begin="0" end="${totalPages - 1}" var="p">
-                        <li class="page-item ${p == currentPage ? 'active' : ''}">
-                            <c:url var="pageUrl" value="${baseUrl}">
-                                <c:if test="${not empty selectedStatus}">       <c:param name="status"         value="${selectedStatus}"/></c:if>
-                                <c:if test="${not empty selectedPriority}">     <c:param name="priority"       value="${selectedPriority}"/></c:if>
-                                <c:if test="${not empty selectedMrPresence}">   <c:param name="mrPresence"     value="${selectedMrPresence}"/></c:if>
-                                <c:if test="${not empty selectedAllDiCompleted}"><c:param name="allDiCompleted" value="${selectedAllDiCompleted}"/></c:if>
-                                <c:param name="page" value="${p}"/>
-                            </c:url>
-                            <a class="page-link" href="${pageUrl}">${p + 1}</a>
-                        </li>
-                    </c:forEach>
-
-                    <%-- Next --%>
-                    <li class="page-item ${currentPage + 1 >= totalPages ? 'disabled' : ''}">
+                <c:choose>
+                    <c:when test="${currentPage + 1 >= totalPages}">
+                        <span class="btn-pager is-disabled">Next<i class="bi bi-chevron-right"></i></span>
+                    </c:when>
+                    <c:otherwise>
                         <c:url var="nextUrl" value="${baseUrl}">
                             <c:if test="${not empty selectedStatus}">       <c:param name="status"         value="${selectedStatus}"/></c:if>
                             <c:if test="${not empty selectedPriority}">     <c:param name="priority"       value="${selectedPriority}"/></c:if>
@@ -262,10 +254,10 @@
                             <c:if test="${not empty selectedAllDiCompleted}"><c:param name="allDiCompleted" value="${selectedAllDiCompleted}"/></c:if>
                             <c:param name="page" value="${currentPage + 1}"/>
                         </c:url>
-                        <a class="page-link" href="${nextUrl}"><i class="bi bi-chevron-right"></i></a>
-                    </li>
-                </ul>
-            </nav>
+                        <a class="btn-pager" href="${nextUrl}">Next<i class="bi bi-chevron-right"></i></a>
+                    </c:otherwise>
+                </c:choose>
+            </div>
         </c:if>
     </div>
 </div>
@@ -281,9 +273,9 @@
 </style>
 
 <div id="mrPanel" style="display:none;" class="card shadow-sm my-4 overflow-hidden">
-    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
-        <span><i class="bi bi-git me-2"></i>MR Status — Task <strong id="panelTaskId"></strong>: <span id="panelTaskDesc" class="fw-normal fst-italic text-white-50"></span></span>
-        <button type="button" class="btn-close btn-close-white btn-sm" onclick="hidePanel()"></button>
+    <div class="card-header panel-head d-flex justify-content-between align-items-center py-2">
+        <span class="d-flex align-items-center gap-2 flex-wrap"><i class="bi bi-git"></i>MR Status — Task <strong id="panelTaskId"></strong>: <span id="panelTaskDesc" class="fw-normal fst-italic panel-desc"></span><span id="panelPrio" class="pill"></span></span>
+        <button type="button" class="btn-close btn-sm" onclick="hidePanel()"></button>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -326,9 +318,18 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
         panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
+    // Panel accent follows the clicked task's priority (same palette as the row bar)
+    // Priority is shown as a label only; the MR block itself uses one fixed color (see task-list.css).
+    var PRIO_LABELS = { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low' };
+    // Product pill colors. Unknown products fall back to gray.
+    var PRODUCT_PILL = { Payroll: 'pill-green', Books: 'pill-purple', Spend: 'pill-pink' };
+
     document.querySelectorAll('.task-row').forEach(function (row) {
         row.addEventListener('click', function () {
             var taskId = this.dataset.taskId;
+            var prioPill = document.getElementById('panelPrio');
+            prioPill.textContent = PRIO_LABELS[this.dataset.priority] || 'Low';
+            prioPill.className = 'pill panel-prio';
             showPanelLoading();
             fetch('/tasks/' + taskId + '/mrs')
                 .then(function (r) { return r.json(); })
@@ -356,7 +357,7 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
 
         // Header: one column per linked MR (product-colored)
         panelHead.innerHTML = '<th style="width:130px;">Field</th>' + mrs.map(function (mr) {
-            return '<th><span class="badge ' + mr.productBadgeClass + ' me-1">' + mr.product + '</span> MR</th>';
+            return '<th><span class="pill ' + (PRODUCT_PILL[mr.product] || 'pill-gray') + '">' + mr.product + '</span></th>';
         }).join('');
 
         if (!mrs.length) {
@@ -463,8 +464,7 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
 
     function mrLinkCell(mr) {
         if (!mr) return null;
-        return '<a href="' + mr.mr + '" target="_blank" class="badge bg-dark text-decoration-none me-1">'
-             + '<i class="bi bi-box-arrow-up-right me-1"></i>' + mr.mrNumber + '</a>'
+        return '<a href="' + mr.mr + '" target="_blank" class="pill pill-gray text-decoration-none me-1">' + mr.mrNumber + '</a>'
              + '<a href="/mrs/edit/' + mr.mrSerialNumber + '" class="btn btn-sm btn-outline-secondary py-0" '
              + 'onclick="event.stopPropagation()" title="Edit MR">'
              + '<i class="bi bi-pencil"></i></a>';
@@ -513,8 +513,8 @@ document.getElementById('taskFilterForm').addEventListener('submit', function ()
     function linkedBadge(mr) {
         if (!mr) return null;
         var v   = mr.mrLinked || '—';
-        var cls = v === 'Linked' ? 'bg-success' : v === 'Not Linked' ? 'bg-danger' : 'bg-secondary';
-        return '<span class="badge ' + cls + '">' + v + '</span>';
+        var cls = v === 'Linked' ? 'pill-green' : v === 'Not Linked' ? 'pill-red' : 'pill-gray';
+        return '<span class="pill ' + cls + '">' + v + '</span>';
     }
 
     function createdCell(mr) {

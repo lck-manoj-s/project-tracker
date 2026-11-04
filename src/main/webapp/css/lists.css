@@ -1,0 +1,198 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Shared list-page styles (Tasks, MRs, and any future list pages)
+   Pills, segmented tabs, filter bar, Add button, footer pager, panel header,
+   and pipeline/deployment steps. Page-specific rules live in their own files
+   (task-list.css for the Tasks page).
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ── Pills (tinted background, darker text of the same hue) ─────────────── */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.pill i {
+    font-size: .8rem;
+}
+
+.pill-red    { background: #FCEBEB; color: #791F1F; }
+.pill-amber  { background: #FAEEDA; color: #633806; }
+.pill-teal   { background: #E1F5EE; color: #085041; }
+.pill-blue   { background: #E6F1FB; color: #0C447C; }
+.pill-purple { background: #EEEDFE; color: #3C3489; }
+.pill-green  { background: #EAF3DE; color: #27500A; }
+.pill-coral  { background: #FAECE7; color: #712B13; }
+.pill-gray   { background: #F1EFE8; color: #444441; }
+.pill-pink   { background: #FBEAF0; color: #72243E; }
+
+/* ── Segmented tabs ─────────────────────────────────────────────────────── */
+.segmented {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    background: #e1e5f2;
+    border-radius: 10px;
+}
+
+.segmented-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: .85rem;
+    font-weight: 500;
+    color: var(--app-text-muted);
+    text-decoration: none;
+    transition: background-color .15s ease, color .15s ease;
+}
+
+button.segmented-item {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.segmented-item:hover {
+    color: var(--app-text);
+}
+
+.segmented-item.active {
+    background: #ffffff;
+    color: var(--bs-primary);
+    box-shadow: 0 1px 2px rgba(16,24,40,.08);
+}
+
+/* ── Section label: small uppercase muted heading (same as form section titles) ─ */
+.section-label {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--app-text-muted);
+    margin-bottom: .5rem;
+}
+
+/* ── Add button (sits on the right of the tabs row) ─────────────────────── */
+.add-btn {
+    border-radius: 8px;
+    padding: .45rem .95rem;
+    font-size: .85rem;
+    font-weight: 500;
+}
+
+/* ── Filter bar: inputs match the form fields ───────────────────────────── */
+.list-filter .form-select-sm {
+    border: 1px solid #c9cfe0;
+    border-radius: 8px;
+    font-size: .85rem;
+    padding-top: .35rem;
+    padding-bottom: .35rem;
+    box-shadow: none;
+}
+
+.list-filter .form-select-sm:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 3px rgba(79,70,229,.15);
+}
+
+.list-filter .btn-sm {
+    border-radius: 8px;
+    padding: .35rem .8rem;
+}
+
+/* ── Table footer: Previous / Next buttons ──────────────────────────────── */
+.list-footer {
+    background: var(--app-surface);
+}
+
+.btn-pager {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: .35rem .8rem;
+    border: 1px solid #c9cfe0;
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--app-text);
+    font-size: .85rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.btn-pager:hover {
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+.btn-pager.is-disabled {
+    color: var(--app-text-muted);
+    opacity: .5;
+    pointer-events: none;
+}
+
+/* ── Panel header (MR status / MR chain): one fixed blue color ───────────── */
+.panel-head {
+    background: #0d6efd;
+    color: #ffffff;
+    border-bottom: 0;
+}
+
+.panel-head .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.panel-desc {
+    color: #ffffff;
+    opacity: .9;
+}
+
+/* ── Pipeline / deployment steps ────────────────────────────────────────── */
+.pipeline-steps {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: nowrap;
+}
+
+.step {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+}
+
+.step:hover {
+    opacity: .85;
+}
+
+/* Completed: solid brand blue with white text */
+.step-done {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #ffffff;
+}
+
+/* Not done yet: white with a visible outline and darker gray text */
+.step-todo {
+    background: #ffffff;
+    border: 1px solid #B4B2A9;
+    color: #5F5E5A;
+}
+
+.step-arrow {
+    color: var(--app-text-muted);
+    font-size: .65rem;
+}

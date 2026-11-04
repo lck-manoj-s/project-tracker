@@ -13,46 +13,32 @@
     </script>
 </c:if>
 
-<style>
-  .pipeline-steps { display: inline-flex; align-items: center; gap: 2px; flex-wrap: nowrap; }
-  .step { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: .7rem; font-weight: 600;
-          white-space: nowrap; border: 1px solid transparent; cursor: pointer; user-select: none; }
-  .step:hover { opacity: .8; }
-  .step-done  { background: #198754; color: #fff; border-color: #198754; }
-  .step-todo  { background: #f8f9fa; color: #adb5bd; border-color: #dee2e6; }
-  .step-arrow { color: #adb5bd; font-size: .65rem; }
-</style>
+<link rel="stylesheet" href="/css/lists.css">
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0"><i class="bi bi-git me-2"></i>Merge Requests</h4>
-    <a href="/mrs/new" class="btn btn-primary btn-sm">
+<h4 class="mb-3"><i class="bi bi-git me-2"></i>Merge Requests</h4>
+
+<%-- ── Product tabs + Add MR (Add MR sits on the right of the tabs row) ─── --%>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+<div class="segmented" role="tablist">
+    <%-- Scoped to Spend specifically for now (see MrController.OTHER_TAB_PRODUCT) —
+         rename/rework this if it becomes a catch-all again. --%>
+    <a class="segmented-item ${activeTab == 'payroll' ? 'active' : ''}" href="/mrs/payroll" role="tab" aria-selected="${activeTab == 'payroll'}">
+        Payroll MRs
+    </a>
+    <a class="segmented-item ${activeTab == 'books' ? 'active' : ''}" href="/mrs/books" role="tab" aria-selected="${activeTab == 'books'}">
+        Books MRs
+    </a>
+    <a class="segmented-item ${activeTab == 'other' ? 'active' : ''}" href="/mrs/other" role="tab" aria-selected="${activeTab == 'other'}">
+        Spend MRs
+    </a>
+</div>
+    <a href="/mrs/new" class="btn btn-primary btn-sm add-btn">
         <i class="bi bi-plus-lg me-1"></i>Add MR
     </a>
 </div>
 
-<%-- ── Product tabs ─────────────────────────────────────────────────── --%>
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <a class="nav-link ${activeTab == 'payroll' ? 'active' : ''}" href="/mrs/payroll">
-            <span class="badge bg-warning text-dark me-1">Payroll</span> MRs
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link ${activeTab == 'books' ? 'active' : ''}" href="/mrs/books">
-            <span class="badge bg-info text-dark me-1">Books</span> MRs
-        </a>
-    </li>
-    <li class="nav-item">
-        <%-- Scoped to Spend specifically for now (see MrController.OTHER_TAB_PRODUCT) —
-             rename/rework this if it becomes a catch-all again. --%>
-        <a class="nav-link ${activeTab == 'other' ? 'active' : ''}" href="/mrs/other">
-            <span class="badge bg-primary text-white me-1">Spend</span> MRs
-        </a>
-    </li>
-</ul>
-
 <%-- ── Filter ───────────────────────────────────────────────────────── --%>
-<div class="filter-card p-3 mb-3">
+<div class="filter-card list-filter p-3 mb-3">
     <form method="get" action="${baseUrl}" class="row g-2 align-items-end" id="mrFilterForm">
 
         <div class="col-auto">
@@ -149,17 +135,33 @@
                                     <td class="text-muted small align-middle">${mr.mrSerialNumber}</td>
                                     <c:if test="${showProductBadge}">
                                         <td class="align-middle">
-                                            <span class="badge ${mr.product.badgeClass}">${mr.product.displayName}</span>
+                                            <c:choose>
+                                                <c:when test="${mr.product.name() == 'PAYROLL'}"><c:set var="prodPill" value="pill-green"/></c:when>
+                                                <c:when test="${mr.product.name() == 'BOOKS'}"><c:set var="prodPill" value="pill-purple"/></c:when>
+                                                <c:when test="${mr.product.name() == 'SPEND'}"><c:set var="prodPill" value="pill-pink"/></c:when>
+                                                <c:otherwise><c:set var="prodPill" value="pill-gray"/></c:otherwise>
+                                            </c:choose>
+                                            <span class="pill ${prodPill}">${mr.product.displayName}</span>
                                         </td>
                                     </c:if>
                                     <td class="align-middle">
-                                        <a href="${mr.mr}" target="_blank" class="badge bg-dark text-decoration-none">
-                                            <i class="bi bi-box-arrow-up-right me-1"></i>${mr.mrNumber}
-                                        </a>
+                                        <c:choose>
+                                            <c:when test="${mr.product.name() == 'PAYROLL'}"><c:set var="mrPill" value="pill-green"/></c:when>
+                                            <c:when test="${mr.product.name() == 'BOOKS'}"><c:set var="mrPill" value="pill-purple"/></c:when>
+                                            <c:when test="${mr.product.name() == 'SPEND'}"><c:set var="mrPill" value="pill-pink"/></c:when>
+                                            <c:otherwise><c:set var="mrPill" value="pill-gray"/></c:otherwise>
+                                        </c:choose>
+                                        <a href="${mr.mr}" target="_blank" class="pill ${mrPill} text-decoration-none">${mr.mrNumber}</a>
                                         <c:if test="${mr.parentMr != null}">
-                                            <button type="button" class="badge bg-secondary border-0 mr-chain-btn" data-mr-id="${mr.mrSerialNumber}"
+                                            <button type="button" class="pill pill-gray border-0 mr-chain-btn" data-mr-id="${mr.mrSerialNumber}" data-kind="chain"
                                                     title="View MR chain (Parent: ${mr.parentMrNumber} · ${mr.parentMr.product.displayName})">
                                                 <i class="bi bi-link-45deg"></i>
+                                            </button>
+                                        </c:if>
+                                        <c:if test="${parentIdsWithChildren.contains(mr.mrSerialNumber)}">
+                                            <button type="button" class="pill pill-gray border-0 mr-chain-btn" data-mr-id="${mr.mrSerialNumber}" data-kind="children"
+                                                    title="View child MRs">
+                                                <i class="bi bi-diagram-3"></i>
                                             </button>
                                         </c:if>
                                         <button class="copy-mr-btn" data-mr="${mr.mrNumber}" onclick="copyMr(this)" title="Copy MR number">
@@ -189,7 +191,7 @@
                                         </div>
                                     </td>
                                     <td class="align-middle">
-                                        <span class="badge ${mr.mrLinked.name() == 'LINKED' ? 'bg-success' : mr.mrLinked.name() == 'NOT_LINKED' ? 'bg-danger' : 'bg-secondary'}">
+                                        <span class="pill ${mr.mrLinked.name() == 'LINKED' ? 'pill-green' : mr.mrLinked.name() == 'NOT_LINKED' ? 'pill-red' : 'pill-gray'}">
                                             ${mr.mrLinked.displayName}
                                         </span>
                                     </td>
@@ -254,68 +256,58 @@
     </div>
 
     <%-- ── Pagination footer ───────────────────────────────────────── --%>
-    <div class="card-footer d-flex justify-content-between align-items-center">
+    <div class="card-footer list-footer d-flex justify-content-between align-items-center">
         <span class="text-muted small">
             Showing ${mrs.size()} of ${totalElements} MR(s)
             &nbsp;|&nbsp; Page ${currentPage + 1} of ${totalPages == 0 ? 1 : totalPages}
         </span>
         <c:if test="${totalPages > 1}">
-            <nav><ul class="pagination pagination-sm mb-0">
-
-                <%-- Previous --%>
-                <li class="page-item ${currentPage == 0 ? 'disabled' : ''}">
-                    <c:url var="prevUrl" value="${baseUrl}">
-                        <c:if test="${not empty hasParentMr}">    <c:param name="hasParentMr"     value="${hasParentMr}"/></c:if>
-                        <c:if test="${not empty parentMrProduct}"><c:param name="parentMrProduct" value="${parentMrProduct}"/></c:if>
-                        <c:if test="${not empty mrLinked}">       <c:param name="mrLinked"        value="${mrLinked}"/></c:if>
-                        <c:if test="${merged != 'all'}">          <c:param name="merged"           value="${merged}"/></c:if>
-                        <c:if test="${deployment != 'notIdc'}">   <c:param name="deployment"      value="${deployment}"/></c:if>
-                        <c:if test="${canIgnore != 'false'}">     <c:param name="canIgnore"       value="${canIgnore}"/></c:if>
-                        <c:param name="page" value="${currentPage - 1}"/>
-                    </c:url>
-                    <a class="page-link" href="${prevUrl}"><i class="bi bi-chevron-left"></i></a>
-                </li>
-
-                <%-- Page numbers --%>
-                <c:forEach begin="0" end="${totalPages - 1}" var="p">
-                    <li class="page-item ${p == currentPage ? 'active' : ''}">
-                        <c:url var="pageUrl" value="${baseUrl}">
+            <div class="d-flex gap-2">
+                <c:choose>
+                    <c:when test="${currentPage == 0}">
+                        <span class="btn-pager is-disabled"><i class="bi bi-chevron-left"></i>Previous</span>
+                    </c:when>
+                    <c:otherwise>
+                        <c:url var="prevUrl" value="${baseUrl}">
                             <c:if test="${not empty hasParentMr}">    <c:param name="hasParentMr"     value="${hasParentMr}"/></c:if>
                             <c:if test="${not empty parentMrProduct}"><c:param name="parentMrProduct" value="${parentMrProduct}"/></c:if>
                             <c:if test="${not empty mrLinked}">       <c:param name="mrLinked"        value="${mrLinked}"/></c:if>
                             <c:if test="${merged != 'all'}">          <c:param name="merged"           value="${merged}"/></c:if>
                             <c:if test="${deployment != 'notIdc'}">   <c:param name="deployment"      value="${deployment}"/></c:if>
                             <c:if test="${canIgnore != 'false'}">     <c:param name="canIgnore"       value="${canIgnore}"/></c:if>
-                            <c:param name="page" value="${p}"/>
+                            <c:param name="page" value="${currentPage - 1}"/>
                         </c:url>
-                        <a class="page-link" href="${pageUrl}">${p + 1}</a>
-                    </li>
-                </c:forEach>
+                        <a class="btn-pager" href="${prevUrl}"><i class="bi bi-chevron-left"></i>Previous</a>
+                    </c:otherwise>
+                </c:choose>
 
-                <%-- Next --%>
-                <li class="page-item ${currentPage + 1 >= totalPages ? 'disabled' : ''}">
-                    <c:url var="nextUrl" value="${baseUrl}">
-                        <c:if test="${not empty hasParentMr}">    <c:param name="hasParentMr"     value="${hasParentMr}"/></c:if>
-                        <c:if test="${not empty parentMrProduct}"><c:param name="parentMrProduct" value="${parentMrProduct}"/></c:if>
-                        <c:if test="${not empty mrLinked}">       <c:param name="mrLinked"        value="${mrLinked}"/></c:if>
-                        <c:if test="${merged != 'all'}">          <c:param name="merged"           value="${merged}"/></c:if>
-                        <c:if test="${deployment != 'notIdc'}">   <c:param name="deployment"      value="${deployment}"/></c:if>
-                        <c:if test="${canIgnore != 'false'}">     <c:param name="canIgnore"       value="${canIgnore}"/></c:if>
-                        <c:param name="page" value="${currentPage + 1}"/>
-                    </c:url>
-                    <a class="page-link" href="${nextUrl}"><i class="bi bi-chevron-right"></i></a>
-                </li>
-
-            </ul></nav>
+                <c:choose>
+                    <c:when test="${currentPage + 1 >= totalPages}">
+                        <span class="btn-pager is-disabled">Next<i class="bi bi-chevron-right"></i></span>
+                    </c:when>
+                    <c:otherwise>
+                        <c:url var="nextUrl" value="${baseUrl}">
+                            <c:if test="${not empty hasParentMr}">    <c:param name="hasParentMr"     value="${hasParentMr}"/></c:if>
+                            <c:if test="${not empty parentMrProduct}"><c:param name="parentMrProduct" value="${parentMrProduct}"/></c:if>
+                            <c:if test="${not empty mrLinked}">       <c:param name="mrLinked"        value="${mrLinked}"/></c:if>
+                            <c:if test="${merged != 'all'}">          <c:param name="merged"           value="${merged}"/></c:if>
+                            <c:if test="${deployment != 'notIdc'}">   <c:param name="deployment"      value="${deployment}"/></c:if>
+                            <c:if test="${canIgnore != 'false'}">     <c:param name="canIgnore"       value="${canIgnore}"/></c:if>
+                            <c:param name="page" value="${currentPage + 1}"/>
+                        </c:url>
+                        <a class="btn-pager" href="${nextUrl}">Next<i class="bi bi-chevron-right"></i></a>
+                    </c:otherwise>
+                </c:choose>
+            </div>
         </c:if>
     </div>
 </div>
 
 <%-- ── MR Chain Panel (hidden until a parent-chain button is clicked) ─── --%>
 <div id="mrChainPanel" style="display:none;" class="card shadow-sm my-4 overflow-hidden">
-    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
-        <span><i class="bi bi-diagram-2 me-2"></i>MR Chain</span>
-        <button type="button" class="btn-close btn-close-white btn-sm" onclick="hideChainPanel()"></button>
+    <div class="card-header panel-head d-flex justify-content-between align-items-center py-2">
+        <span><i class="bi bi-diagram-2 me-2"></i><span id="chainPanelTitle">MR Chain</span></span>
+        <button type="button" class="btn-close btn-sm" onclick="hideChainPanel()"></button>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -454,14 +446,17 @@ function showChainLoading() {
     chainPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+// data-kind="chain"    → this MR's ancestors (its parent, grandparent, ...)
+// data-kind="children" → this MR's direct children (MRs whose parent is this one)
 document.querySelectorAll('.mr-chain-btn').forEach(function (btn) {
     btn.addEventListener('click', function (e) {
         e.stopPropagation();
         var mrId = this.dataset.mrId;
+        var kind = this.dataset.kind === 'children' ? 'children' : 'chain';
         showChainLoading();
-        fetch('/mrs/' + mrId + '/chain')
+        fetch('/mrs/' + mrId + (kind === 'children' ? '/children' : '/chain'))
             .then(function (r) { return r.json(); })
-            .then(function (data) { renderChainPanel(data); })
+            .then(function (data) { renderChainPanel(data, kind); })
             .catch(function () {
                 chainPanelBody.innerHTML = '<tr><td colspan="2" class="text-center text-danger py-4">Could not load MR chain.</td></tr>';
                 showToast('Could not load MR chain.', 'danger');
@@ -479,9 +474,11 @@ window.hideChainPanel = function () { chainPanel.style.display = 'none'; };
 
 function chainNa() { return '<span class="text-muted">—</span>'; }
 
+// Product pill colors — same mapping as the table and the Tasks page. Unknown products fall back to gray.
+var PRODUCT_PILL = { Payroll: 'pill-green', Books: 'pill-purple', Spend: 'pill-pink' };
+
 function chainMrLinkCell(mr) {
-    return '<a href="' + mr.mr + '" target="_blank" class="badge bg-dark text-decoration-none me-1">'
-         + '<i class="bi bi-box-arrow-up-right me-1"></i>' + mr.mrNumber + '</a>'
+    return '<a href="' + mr.mr + '" target="_blank" class="pill pill-gray text-decoration-none me-1">' + mr.mrNumber + '</a>'
          + '<a href="/mrs/edit/' + mr.mrSerialNumber + '" class="btn btn-sm btn-outline-secondary py-0" '
          + 'onclick="event.stopPropagation()" title="Edit MR">'
          + '<i class="bi bi-pencil"></i></a>';
@@ -530,8 +527,8 @@ function chainDeploymentCell(mr) {
 
 function chainLinkedBadge(mr) {
     var v = mr.mrLinked || '—';
-    var cls = v === 'Linked' ? 'bg-success' : v === 'Not Linked' ? 'bg-danger' : 'bg-secondary';
-    return '<span class="badge ' + cls + '">' + v + '</span>';
+    var cls = v === 'Linked' ? 'pill-green' : v === 'Not Linked' ? 'pill-red' : 'pill-gray';
+    return '<span class="pill ' + cls + '">' + v + '</span>';
 }
 
 function chainCreatedCell(mr) {
@@ -539,13 +536,14 @@ function chainCreatedCell(mr) {
     return '<span class="text-muted small">' + mr.createdAt + '</span>';
 }
 
-function renderChainPanel(data) {
+function renderChainPanel(data, kind) {
     var chain = data.chain || [];
+    document.getElementById('chainPanelTitle').textContent = kind === 'children' ? 'Child MRs' : 'MR Chain';
 
-    chainPanelHead.innerHTML = '<th style="width:130px;">Field</th>' + chain.map(function (mr, i) {
-        var isSelected = i === chain.length - 1;
-        return '<th><span class="badge ' + mr.productBadgeClass + ' me-1">' + mr.product + '</span> MR'
-             + (isSelected ? ' <span class="badge bg-dark ms-1">Selected</span>' : '') + '</th>';
+    chainPanelHead.innerHTML = '<th style="width:130px;">Field</th>' + chain.map(function (mr) {
+        var isSelected = mr.mrSerialNumber === data.selectedId;
+        return '<th><span class="pill ' + (PRODUCT_PILL[mr.product] || 'pill-gray') + ' me-1">' + mr.product + '</span> MR'
+             + (isSelected ? ' <span class="pill pill-gray ms-1">Selected</span>' : '') + '</th>';
     }).join('');
 
     if (!chain.length) {

@@ -2,34 +2,27 @@
 <%@ taglib prefix="c"  uri="jakarta.tags.core" %>
 <%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
 <%@include file="../layout/header.jsp" %>
+<link rel="stylesheet" href="/css/lists.css">
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0"><i class="bi bi-clock-history me-2"></i>Audit History</h4>
-</div>
+<h4 class="mb-3"><i class="bi bi-clock-history me-2"></i>Audit History</h4>
 
 <%-- ── Tabs ──────────────────────────────────────────────────────────── --%>
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <a class="nav-link ${tab == 'tasks' ? 'active' : ''}" href="/history?tab=tasks">
-            <i class="bi bi-list-task me-1"></i>Tasks
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link ${tab == 'mrs' ? 'active' : ''}" href="/history?tab=mrs">
-            <i class="bi bi-git me-1"></i>Merge Requests
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link ${tab == 'deployment' ? 'active' : ''}" href="/history?tab=deployment">
-            <i class="bi bi-cloud-arrow-up me-1"></i>Deployment
-        </a>
-    </li>
-</ul>
+<div class="segmented mb-3" role="tablist">
+    <a class="segmented-item ${tab == 'tasks' ? 'active' : ''}" href="/history?tab=tasks" role="tab" aria-selected="${tab == 'tasks'}">
+        <i class="bi bi-list-task"></i>Tasks
+    </a>
+    <a class="segmented-item ${tab == 'mrs' ? 'active' : ''}" href="/history?tab=mrs" role="tab" aria-selected="${tab == 'mrs'}">
+        <i class="bi bi-git"></i>Merge Requests
+    </a>
+    <a class="segmented-item ${tab == 'deployment' ? 'active' : ''}" href="/history?tab=deployment" role="tab" aria-selected="${tab == 'deployment'}">
+        <i class="bi bi-cloud-arrow-up"></i>Deployment
+    </a>
+</div>
 
 <%-- ── TASK HISTORY ────────────────────────────────────────────────── --%>
 <c:if test="${tab == 'tasks'}">
 
-    <div class="filter-card p-3 mb-3">
+    <div class="filter-card list-filter p-3 mb-3">
         <form method="get" action="/history" class="row g-2 align-items-end">
             <input type="hidden" name="tab" value="tasks"/>
             <div class="col-auto">
@@ -89,7 +82,7 @@
                                     <tr>
                                         <td class="text-muted small align-middle">${h.id}</td>
                                         <td class="align-middle">
-                                            <a href="/tasks/edit/${h.task.taskId}" class="fw-semibold text-decoration-none">#${h.task.taskId}</a>
+                                            <a href="/tasks/edit/${h.task.taskId}" class="pill pill-blue text-decoration-none">#${h.task.taskId}</a>
                                         </td>
                                         <td class="align-middle small text-muted" style="max-width:280px;">
                                             <span class="d-inline-block text-truncate" style="max-width:270px;" title="${h.task.description}">${h.task.description}</span>
@@ -97,21 +90,21 @@
                                         <td class="align-middle">
                                             <c:choose>
                                                 <c:when test="${h.previousStatus != null}">
-                                                    <span class="badge bg-light text-dark border">${h.previousStatus.displayName}</span>
+                                                    <span class="pill pill-gray">${h.previousStatus.displayName}</span>
                                                 </c:when>
                                                 <c:otherwise><span class="text-muted small">— (new)</span></c:otherwise>
                                             </c:choose>
                                         </td>
                                         <td class="align-middle">
                                             <c:choose>
-                                                <c:when test="${h.newStatus.name() == 'YET_TO_START'}"><span class="badge bg-danger">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'IDENTIFYING_ISSUE'}"><span class="badge bg-warning text-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'FIXING'}"><span class="badge bg-info text-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'MR_CREATED'}"><span class="badge bg-primary">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'REWORKING'}"><span class="badge bg-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'HALTED'}"><span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'DONE'}"><span class="badge bg-success">${h.newStatus.displayName}</span></c:when>
-                                                <c:otherwise><span class="badge bg-secondary">${h.newStatus.displayName}</span></c:otherwise>
+                                                <c:when test="${h.newStatus.name() == 'YET_TO_START'}"><span class="pill pill-red"><i class="bi bi-circle"></i>${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'IDENTIFYING_ISSUE'}"><span class="pill pill-amber"><i class="bi bi-search"></i>${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'FIXING'}"><span class="pill pill-teal"><i class="bi bi-wrench"></i>${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'MR_CREATED'}"><span class="pill pill-blue"><i class="bi bi-git"></i>${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'REWORKING'}"><span class="pill pill-purple"><i class="bi bi-arrow-repeat"></i>${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'HALTED'}"><span class="pill pill-gray"><i class="bi bi-pause-circle"></i>${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'DONE'}"><span class="pill pill-green"><i class="bi bi-check-circle"></i>${h.newStatus.displayName}</span></c:when>
+                                                <c:otherwise><span class="pill pill-gray"><i class="bi bi-circle"></i>${h.newStatus.displayName}</span></c:otherwise>
                                             </c:choose>
                                         </td>
                                         <td class="align-middle text-nowrap small">
@@ -126,49 +119,46 @@
                 </table>
             </div>
         </div>
-        <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="card-footer list-footer d-flex justify-content-between align-items-center">
             <span class="text-muted small">
                 Showing ${taskHistory.size()} of ${totalElements} entries
                 &nbsp;|&nbsp; Page ${currentPage + 1} of ${totalPages == 0 ? 1 : totalPages}
             </span>
             <c:if test="${totalPages > 1}">
-                <nav><ul class="pagination pagination-sm mb-0">
-                    <li class="page-item ${currentPage == 0 ? 'disabled' : ''}">
-                        <c:url var="p0" value="/history">
-                            <c:param name="tab" value="tasks"/>
-                            <c:if test="${taskId != null}"><c:param name="taskId" value="${taskId}"/></c:if>
-                            <c:if test="${not empty prevStatus}"><c:param name="prevStatus" value="${prevStatus}"/></c:if>
-                            <c:if test="${not empty newStatus}"><c:param name="newStatus" value="${newStatus}"/></c:if>
-                            <c:if test="${not empty taskDescription}"><c:param name="taskDescription" value="${taskDescription}"/></c:if>
-                            <c:param name="page" value="${currentPage - 1}"/>
-                        </c:url>
-                        <a class="page-link" href="${p0}"><i class="bi bi-chevron-left"></i></a>
-                    </li>
-                    <c:forEach begin="0" end="${totalPages - 1}" var="pg">
-                        <li class="page-item ${pg == currentPage ? 'active' : ''}">
-                            <c:url var="pp" value="/history">
+                <div class="d-flex gap-2">
+                    <c:choose>
+                        <c:when test="${currentPage == 0}">
+                            <span class="btn-pager is-disabled"><i class="bi bi-chevron-left"></i>Previous</span>
+                        </c:when>
+                        <c:otherwise>
+                            <c:url var="p0" value="/history">
                                 <c:param name="tab" value="tasks"/>
                                 <c:if test="${taskId != null}"><c:param name="taskId" value="${taskId}"/></c:if>
                                 <c:if test="${not empty prevStatus}"><c:param name="prevStatus" value="${prevStatus}"/></c:if>
                                 <c:if test="${not empty newStatus}"><c:param name="newStatus" value="${newStatus}"/></c:if>
                                 <c:if test="${not empty taskDescription}"><c:param name="taskDescription" value="${taskDescription}"/></c:if>
-                                <c:param name="page" value="${pg}"/>
+                                <c:param name="page" value="${currentPage - 1}"/>
                             </c:url>
-                            <a class="page-link" href="${pp}">${pg + 1}</a>
-                        </li>
-                    </c:forEach>
-                    <li class="page-item ${currentPage + 1 >= totalPages ? 'disabled' : ''}">
-                        <c:url var="p1" value="/history">
-                            <c:param name="tab" value="tasks"/>
-                            <c:if test="${taskId != null}"><c:param name="taskId" value="${taskId}"/></c:if>
-                            <c:if test="${not empty prevStatus}"><c:param name="prevStatus" value="${prevStatus}"/></c:if>
-                            <c:if test="${not empty newStatus}"><c:param name="newStatus" value="${newStatus}"/></c:if>
-                            <c:if test="${not empty taskDescription}"><c:param name="taskDescription" value="${taskDescription}"/></c:if>
-                            <c:param name="page" value="${currentPage + 1}"/>
-                        </c:url>
-                        <a class="page-link" href="${p1}"><i class="bi bi-chevron-right"></i></a>
-                    </li>
-                </ul></nav>
+                            <a class="btn-pager" href="${p0}"><i class="bi bi-chevron-left"></i>Previous</a>
+                        </c:otherwise>
+                    </c:choose>
+                    <c:choose>
+                        <c:when test="${currentPage + 1 >= totalPages}">
+                            <span class="btn-pager is-disabled">Next<i class="bi bi-chevron-right"></i></span>
+                        </c:when>
+                        <c:otherwise>
+                            <c:url var="p1" value="/history">
+                                <c:param name="tab" value="tasks"/>
+                                <c:if test="${taskId != null}"><c:param name="taskId" value="${taskId}"/></c:if>
+                                <c:if test="${not empty prevStatus}"><c:param name="prevStatus" value="${prevStatus}"/></c:if>
+                                <c:if test="${not empty newStatus}"><c:param name="newStatus" value="${newStatus}"/></c:if>
+                                <c:if test="${not empty taskDescription}"><c:param name="taskDescription" value="${taskDescription}"/></c:if>
+                                <c:param name="page" value="${currentPage + 1}"/>
+                            </c:url>
+                            <a class="btn-pager" href="${p1}">Next<i class="bi bi-chevron-right"></i></a>
+                        </c:otherwise>
+                    </c:choose>
+                </div>
             </c:if>
         </div>
     </div>
@@ -177,7 +167,7 @@
 <%-- ── MR HISTORY ──────────────────────────────────────────────────── --%>
 <c:if test="${tab == 'mrs'}">
 
-    <div class="filter-card p-3 mb-3">
+    <div class="filter-card list-filter p-3 mb-3">
         <form method="get" action="/history" class="row g-2 align-items-end">
             <input type="hidden" name="tab" value="mrs"/>
             <div class="col-auto">
@@ -246,8 +236,13 @@
                                     <tr>
                                         <td class="text-muted small align-middle">${h.id}</td>
                                         <td class="align-middle">
-                                            <span class="badge ${h.mergeRequest.product.badgeClass} me-1">${h.mergeRequest.product.displayName}</span>
-                                            <a href="${h.mergeRequest.mr}" target="_blank" class="fw-semibold text-decoration-none">${h.mergeRequest.mrNumber}</a>
+                                            <c:choose>
+                                                <c:when test="${h.mergeRequest.product.name() == 'PAYROLL'}"><c:set var="hProd" value="pill-green"/></c:when>
+                                                <c:when test="${h.mergeRequest.product.name() == 'BOOKS'}"><c:set var="hProd" value="pill-purple"/></c:when>
+                                                <c:when test="${h.mergeRequest.product.name() == 'SPEND'}"><c:set var="hProd" value="pill-pink"/></c:when>
+                                                <c:otherwise><c:set var="hProd" value="pill-gray"/></c:otherwise>
+                                            </c:choose>
+                                            <a href="${h.mergeRequest.mr}" target="_blank" class="pill ${hProd} text-decoration-none">${h.mergeRequest.mrNumber}</a>
                                             <a href="/mrs/edit/${h.mergeRequest.mrSerialNumber}" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"><i class="bi bi-pencil" style="font-size:.65rem;"></i></a>
                                         </td>
                                         <td class="align-middle small text-muted" style="max-width:220px;">
@@ -261,20 +256,20 @@
                                         <td class="align-middle">
                                             <c:choose>
                                                 <c:when test="${h.previousStatus != null}">
-                                                    <span class="badge bg-light text-dark border">${h.previousStatus.displayName}</span>
+                                                    <span class="pill pill-gray">${h.previousStatus.displayName}</span>
                                                 </c:when>
                                                 <c:otherwise><span class="text-muted small">— (new)</span></c:otherwise>
                                             </c:choose>
                                         </td>
                                         <td class="align-middle">
                                             <c:choose>
-                                                <c:when test="${h.newStatus.name() == 'NEW'}"><span class="badge bg-secondary">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'REVIEWED'}"><span class="badge bg-info text-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'DI_COMPLETED'}"><span class="badge bg-primary">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'GTM'}"><span class="badge bg-warning text-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'RTM'}"><span class="badge bg-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'MERGED'}"><span class="badge bg-success">${h.newStatus.displayName}</span></c:when>
-                                                <c:otherwise><span class="badge bg-secondary">${h.newStatus.displayName}</span></c:otherwise>
+                                                <c:when test="${h.newStatus.name() == 'NEW'}"><span class="pill pill-gray">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'REVIEWED'}"><span class="pill pill-teal">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'DI_COMPLETED'}"><span class="pill pill-blue">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'GTM'}"><span class="pill pill-amber">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'RTM'}"><span class="pill pill-coral">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'MERGED'}"><span class="pill pill-green">${h.newStatus.displayName}</span></c:when>
+                                                <c:otherwise><span class="pill pill-gray">${h.newStatus.displayName}</span></c:otherwise>
                                             </c:choose>
                                         </td>
                                         <td class="align-middle text-nowrap small">
@@ -289,52 +284,48 @@
                 </table>
             </div>
         </div>
-        <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="card-footer list-footer d-flex justify-content-between align-items-center">
             <span class="text-muted small">
                 Showing ${mrHistory.size()} of ${totalElements} entries
                 &nbsp;|&nbsp; Page ${currentPage + 1} of ${totalPages == 0 ? 1 : totalPages}
             </span>
             <c:if test="${totalPages > 1}">
-                <nav><ul class="pagination pagination-sm mb-0">
-                    <li class="page-item ${currentPage == 0 ? 'disabled' : ''}">
-                        <c:url var="mp0" value="/history">
-                            <c:param name="tab" value="mrs"/>
-                            <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
-                            <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
-                            <c:if test="${not empty prevMrStatus}"><c:param name="prevMrStatus" value="${prevMrStatus}"/></c:if>
-                            <c:if test="${not empty newMrStatus}"><c:param name="newMrStatus" value="${newMrStatus}"/></c:if>
-                            <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
-                            <c:param name="page" value="${currentPage - 1}"/>
-                        </c:url>
-                        <a class="page-link" href="${mp0}"><i class="bi bi-chevron-left"></i></a>
-                    </li>
-                    <c:forEach begin="0" end="${totalPages - 1}" var="pg">
-                        <li class="page-item ${pg == currentPage ? 'active' : ''}">
-                            <c:url var="mpp" value="/history">
+                <div class="d-flex gap-2">
+                    <c:choose>
+                        <c:when test="${currentPage == 0}">
+                            <span class="btn-pager is-disabled"><i class="bi bi-chevron-left"></i>Previous</span>
+                        </c:when>
+                        <c:otherwise>
+                            <c:url var="mp0" value="/history">
                                 <c:param name="tab" value="mrs"/>
                                 <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
                                 <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
                                 <c:if test="${not empty prevMrStatus}"><c:param name="prevMrStatus" value="${prevMrStatus}"/></c:if>
                                 <c:if test="${not empty newMrStatus}"><c:param name="newMrStatus" value="${newMrStatus}"/></c:if>
                                 <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
-                                <c:param name="page" value="${pg}"/>
+                                <c:param name="page" value="${currentPage - 1}"/>
                             </c:url>
-                            <a class="page-link" href="${mpp}">${pg + 1}</a>
-                        </li>
-                    </c:forEach>
-                    <li class="page-item ${currentPage + 1 >= totalPages ? 'disabled' : ''}">
-                        <c:url var="mp1" value="/history">
-                            <c:param name="tab" value="mrs"/>
-                            <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
-                            <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
-                            <c:if test="${not empty prevMrStatus}"><c:param name="prevMrStatus" value="${prevMrStatus}"/></c:if>
-                            <c:if test="${not empty newMrStatus}"><c:param name="newMrStatus" value="${newMrStatus}"/></c:if>
-                            <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
-                            <c:param name="page" value="${currentPage + 1}"/>
-                        </c:url>
-                        <a class="page-link" href="${mp1}"><i class="bi bi-chevron-right"></i></a>
-                    </li>
-                </ul></nav>
+                            <a class="btn-pager" href="${mp0}"><i class="bi bi-chevron-left"></i>Previous</a>
+                        </c:otherwise>
+                    </c:choose>
+                    <c:choose>
+                        <c:when test="${currentPage + 1 >= totalPages}">
+                            <span class="btn-pager is-disabled">Next<i class="bi bi-chevron-right"></i></span>
+                        </c:when>
+                        <c:otherwise>
+                            <c:url var="mp1" value="/history">
+                                <c:param name="tab" value="mrs"/>
+                                <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
+                                <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
+                                <c:if test="${not empty prevMrStatus}"><c:param name="prevMrStatus" value="${prevMrStatus}"/></c:if>
+                                <c:if test="${not empty newMrStatus}"><c:param name="newMrStatus" value="${newMrStatus}"/></c:if>
+                                <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
+                                <c:param name="page" value="${currentPage + 1}"/>
+                            </c:url>
+                            <a class="btn-pager" href="${mp1}">Next<i class="bi bi-chevron-right"></i></a>
+                        </c:otherwise>
+                    </c:choose>
+                </div>
             </c:if>
         </div>
     </div>
@@ -343,7 +334,7 @@
 <%-- ── DEPLOYMENT HISTORY ──────────────────────────────────────────── --%>
 <c:if test="${tab == 'deployment'}">
 
-    <div class="filter-card p-3 mb-3">
+    <div class="filter-card list-filter p-3 mb-3">
         <form method="get" action="/history" class="row g-2 align-items-end">
             <input type="hidden" name="tab" value="deployment"/>
             <div class="col-auto">
@@ -412,8 +403,14 @@
                                     <tr>
                                         <td class="text-muted small align-middle">${h.id}</td>
                                         <td class="align-middle">
-                                            <span class="badge ${h.mergeRequest.product.badgeClass} me-1">${h.mergeRequest.product.displayName}</span>
-                                            <a href="${h.mergeRequest.mr}" target="_blank" class="fw-semibold text-decoration-none">${h.mergeRequest.mrNumber}</a>
+                                            <c:choose>
+                                                <c:when test="${h.mergeRequest.product.name() == 'PAYROLL'}"><c:set var="hProd" value="pill-green"/></c:when>
+                                                <c:when test="${h.mergeRequest.product.name() == 'BOOKS'}"><c:set var="hProd" value="pill-purple"/></c:when>
+                                                <c:when test="${h.mergeRequest.product.name() == 'SPEND'}"><c:set var="hProd" value="pill-pink"/></c:when>
+                                                <c:otherwise><c:set var="hProd" value="pill-gray"/></c:otherwise>
+                                            </c:choose>
+                                            <span class="pill ${hProd}">${h.mergeRequest.product.displayName}</span>
+                                            <a href="${h.mergeRequest.mr}" target="_blank" class="pill ${hProd} text-decoration-none">${h.mergeRequest.mrNumber}</a>
                                             <a href="/mrs/edit/${h.mergeRequest.mrSerialNumber}" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"><i class="bi bi-pencil" style="font-size:.65rem;"></i></a>
                                         </td>
                                         <td class="align-middle small text-muted" style="max-width:220px;">
@@ -427,18 +424,18 @@
                                         <td class="align-middle">
                                             <c:choose>
                                                 <c:when test="${h.previousStatus != null}">
-                                                    <span class="badge bg-light text-dark border">${h.previousStatus.displayName}</span>
+                                                    <span class="pill pill-gray">${h.previousStatus.displayName}</span>
                                                 </c:when>
                                                 <c:otherwise><span class="text-muted small">— (new)</span></c:otherwise>
                                             </c:choose>
                                         </td>
                                         <td class="align-middle">
                                             <c:choose>
-                                                <c:when test="${h.newStatus.name() == 'NONE'}"><span class="badge bg-secondary">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'LOCAL'}"><span class="badge bg-info text-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'PRE'}"><span class="badge bg-warning text-dark">${h.newStatus.displayName}</span></c:when>
-                                                <c:when test="${h.newStatus.name() == 'IDC'}"><span class="badge bg-success">${h.newStatus.displayName}</span></c:when>
-                                                <c:otherwise><span class="badge bg-secondary">${h.newStatus.displayName}</span></c:otherwise>
+                                                <c:when test="${h.newStatus.name() == 'NONE'}"><span class="pill pill-gray">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'LOCAL'}"><span class="pill pill-teal">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'PRE'}"><span class="pill pill-amber">${h.newStatus.displayName}</span></c:when>
+                                                <c:when test="${h.newStatus.name() == 'IDC'}"><span class="pill pill-green">${h.newStatus.displayName}</span></c:when>
+                                                <c:otherwise><span class="pill pill-gray">${h.newStatus.displayName}</span></c:otherwise>
                                             </c:choose>
                                         </td>
                                         <td class="align-middle text-nowrap small">
@@ -453,52 +450,48 @@
                 </table>
             </div>
         </div>
-        <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="card-footer list-footer d-flex justify-content-between align-items-center">
             <span class="text-muted small">
                 Showing ${deploymentHistory.size()} of ${totalElements} entries
                 &nbsp;|&nbsp; Page ${currentPage + 1} of ${totalPages == 0 ? 1 : totalPages}
             </span>
             <c:if test="${totalPages > 1}">
-                <nav><ul class="pagination pagination-sm mb-0">
-                    <li class="page-item ${currentPage == 0 ? 'disabled' : ''}">
-                        <c:url var="dp0" value="/history">
-                            <c:param name="tab" value="deployment"/>
-                            <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
-                            <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
-                            <c:if test="${not empty prevDeployStatus}"><c:param name="prevDeployStatus" value="${prevDeployStatus}"/></c:if>
-                            <c:if test="${not empty newDeployStatus}"><c:param name="newDeployStatus" value="${newDeployStatus}"/></c:if>
-                            <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
-                            <c:param name="page" value="${currentPage - 1}"/>
-                        </c:url>
-                        <a class="page-link" href="${dp0}"><i class="bi bi-chevron-left"></i></a>
-                    </li>
-                    <c:forEach begin="0" end="${totalPages - 1}" var="pg">
-                        <li class="page-item ${pg == currentPage ? 'active' : ''}">
-                            <c:url var="dpp" value="/history">
+                <div class="d-flex gap-2">
+                    <c:choose>
+                        <c:when test="${currentPage == 0}">
+                            <span class="btn-pager is-disabled"><i class="bi bi-chevron-left"></i>Previous</span>
+                        </c:when>
+                        <c:otherwise>
+                            <c:url var="dp0" value="/history">
                                 <c:param name="tab" value="deployment"/>
                                 <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
                                 <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
                                 <c:if test="${not empty prevDeployStatus}"><c:param name="prevDeployStatus" value="${prevDeployStatus}"/></c:if>
                                 <c:if test="${not empty newDeployStatus}"><c:param name="newDeployStatus" value="${newDeployStatus}"/></c:if>
                                 <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
-                                <c:param name="page" value="${pg}"/>
+                                <c:param name="page" value="${currentPage - 1}"/>
                             </c:url>
-                            <a class="page-link" href="${dpp}">${pg + 1}</a>
-                        </li>
-                    </c:forEach>
-                    <li class="page-item ${currentPage + 1 >= totalPages ? 'disabled' : ''}">
-                        <c:url var="dp1" value="/history">
-                            <c:param name="tab" value="deployment"/>
-                            <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
-                            <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
-                            <c:if test="${not empty prevDeployStatus}"><c:param name="prevDeployStatus" value="${prevDeployStatus}"/></c:if>
-                            <c:if test="${not empty newDeployStatus}"><c:param name="newDeployStatus" value="${newDeployStatus}"/></c:if>
-                            <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
-                            <c:param name="page" value="${currentPage + 1}"/>
-                        </c:url>
-                        <a class="page-link" href="${dp1}"><i class="bi bi-chevron-right"></i></a>
-                    </li>
-                </ul></nav>
+                            <a class="btn-pager" href="${dp0}"><i class="bi bi-chevron-left"></i>Previous</a>
+                        </c:otherwise>
+                    </c:choose>
+                    <c:choose>
+                        <c:when test="${currentPage + 1 >= totalPages}">
+                            <span class="btn-pager is-disabled">Next<i class="bi bi-chevron-right"></i></span>
+                        </c:when>
+                        <c:otherwise>
+                            <c:url var="dp1" value="/history">
+                                <c:param name="tab" value="deployment"/>
+                                <c:if test="${mrId != null}"><c:param name="mrId" value="${mrId}"/></c:if>
+                                <c:if test="${not empty product}"><c:param name="product" value="${product}"/></c:if>
+                                <c:if test="${not empty prevDeployStatus}"><c:param name="prevDeployStatus" value="${prevDeployStatus}"/></c:if>
+                                <c:if test="${not empty newDeployStatus}"><c:param name="newDeployStatus" value="${newDeployStatus}"/></c:if>
+                                <c:if test="${not empty mrName}"><c:param name="mrName" value="${mrName}"/></c:if>
+                                <c:param name="page" value="${currentPage + 1}"/>
+                            </c:url>
+                            <a class="btn-pager" href="${dp1}">Next<i class="bi bi-chevron-right"></i></a>
+                        </c:otherwise>
+                    </c:choose>
+                </div>
             </c:if>
         </div>
     </div>

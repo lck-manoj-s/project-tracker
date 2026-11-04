@@ -471,6 +471,33 @@ public class DashboardController {
         model.addAttribute("tasksCompletedByMonth", tasksCompletedByMonth);
         model.addAttribute("mrsMergedByMonth",      mrsMergedByMonth);
 
+        // MR breakdowns for the unified dashboard — all MRs, so each set sums to totalMrs
+        List<Map<String, Object>> mrByStatus = new ArrayList<>();
+        for (MrStatus s : MrStatus.values()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("label", s.getDisplayName());
+            item.put("count", allMrs.stream().filter(mr -> mr.getStatus() == s).count());
+            mrByStatus.add(item);
+        }
+        List<Map<String, Object>> mrByProduct = new ArrayList<>();
+        for (Product p : Product.values()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("label", p.getDisplayName());
+            item.put("count", allMrs.stream().filter(mr -> mr.getProduct() == p).count());
+            mrByProduct.add(item);
+        }
+        // Task breakdown by status — same bar layout as the MR breakdown, all tasks
+        List<Map<String, Object>> taskByStatus = new ArrayList<>();
+        for (TaskStatus s : TaskStatus.values()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("label", s.getDisplayName());
+            item.put("count", allTasks.stream().filter(t -> t.getStatus() == s).count());
+            taskByStatus.add(item);
+        }
+        model.addAttribute("taskByStatus", taskByStatus);
+        model.addAttribute("mrByStatus",  mrByStatus);
+        model.addAttribute("mrByProduct", mrByProduct);
+
         // Time Sheet analytics
         model.addAttribute("totalTimeSheetEntries", allTimeSheetEntries.size());
         model.addAttribute("totalLoggedLabel",      formatMinutes(totalLoggedMinutes));
